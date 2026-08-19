@@ -16,12 +16,21 @@ IP.Check.Place -4/-6 -j -p
 
 - The first registered user becomes the initial administrator and public registration closes immediately.
 - Administrators control registration, roles and one-use password reset links. Non-admin users can only access nodes they enrolled.
+- The anonymous public dashboard exposes only masked addresses, aggregate quality scores, rankings and unlock status. Node detail, complete addresses, alerts and control operations require a session.
 - A node is the business asset.
 - An agent is one installation of the collector.
 - The agent generates its Ed25519 key pair locally.
 - A ten-minute, one-use enrollment token registers only the public key.
 - Every ingest request binds method, path, content digest, timestamp, nonce and key ID.
 - The server accepts five minutes of clock skew and remembers nonces for ten minutes.
+
+## Reporting schedule and dual stack
+
+- Heartbeats run every two minutes and return server-side scan directives and queued manual scans.
+- Each node stores its own quality-scan interval. The default is six hours; enrollment and authenticated node settings accept 30 minutes through one week.
+- The Agent detects usable local IPv4 and global IPv6 interfaces and scans available families concurrently. The server keeps the latest report for each family in node detail.
+- A newly enrolled node is immediately due. Installation waits for the first scan and prints a 1–3 minute expectation instead of hiding the result in a background log.
+- The adapter parses stdout before considering the upstream process exit code because IP.Check.Place can emit a complete JSON report and still exit with status 1.
 
 ## Storage path
 

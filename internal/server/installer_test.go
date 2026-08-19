@@ -30,10 +30,13 @@ func TestGeneratedInstallerAndAgentDownload(t *testing.T) {
 		t.Fatalf("download installer: %d %s", res.Code, res.Body.String())
 	}
 	script := res.Body.String()
-	for _, expected := range []string{"REQUESTED_OS='alpine'", "REQUESTED_PLATFORM='lxc'", "REQUESTED_ARCH='arm64'", "/api/v1/downloads/agent/$ARCH", "install_systemd", "install_cron", "install_loop"} {
+	for _, expected := range []string{"REQUESTED_OS='alpine'", "REQUESTED_PLATFORM='lxc'", "REQUESTED_ARCH='arm64'", "/api/v1/downloads/agent/$ARCH", "install_systemd", "install_cron", "install_loop", "first IPv4/IPv6 quality report", "usually takes 1-3 minutes"} {
 		if !strings.Contains(script, expected) {
 			t.Errorf("installer missing %q", expected)
 		}
+	}
+	if strings.Contains(script, "--family 4 scan") {
+		t.Fatal("installer still hard-codes IPv4-only scheduled scans")
 	}
 
 	dir := t.TempDir()

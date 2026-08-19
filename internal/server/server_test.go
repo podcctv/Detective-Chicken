@@ -74,6 +74,9 @@ func TestEnrollmentRegistrationAndSignedHeartbeat(t *testing.T) {
 	if res.Code != 202 {
 		t.Fatalf("heartbeat: %d %s", res.Code, res.Body.String())
 	}
+	if !strings.Contains(res.Body.String(), `"scan_due":true`) || !strings.Contains(res.Body.String(), `"scan_interval_minutes":360`) {
+		t.Fatalf("first heartbeat did not request the initial scheduled scan: %s", res.Body.String())
+	}
 	n, err := st.Node(reg["node_id"].(string))
 	if err != nil || n.Status != "online" {
 		t.Fatalf("node was not updated: %#v %v", n, err)
@@ -221,20 +224,56 @@ func TestNodeOwnershipAndIPVisibility(t *testing.T) {
 	api.Handler().ServeHTTP(res, req)
 
 	nodeID := reg["node_id"].(string)
+	ipv6Report, _ := json.Marshal(map[string]any{
+		"schema_version": "1.0", "report_id": "rpt_visibility_v6", "agent_id": reg["agent_id"], "node_id": nodeID, "collected_at": time.Now().UTC(),
+		"collector": map[string]any{"name": "ipquality", "adapter_version": "test"},
+		"network":   map[string]any{"family": 6, "reported_ip": "2001:db8:abcd:12::99"},
+		"quality":   map[string]any{"asn": 64501, "organization": "Example v6", "country_code": "US", "scores": map[string]any{"ipqs": 7}, "factors": map[string]any{}, "media": map[string]any{"Netflix": map[string]any{"Status": "解锁"}}, "mail": map[string]any{}},
+	})
+	req = signedRequest(t, http.MethodPost, "/api/v1/reports", ipv6Report, reg["agent_id"].(string), priv, "visibility-v6-nonce")
+	res = httptest.NewRecorder()
+	api.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusAccepted {
+		t.Fatalf("IPv6 report: %d %s", res.Code, res.Body.String())
+	}
+
 	res = httptest.NewRecorder()
 	api.Handler().ServeHTTP(res, withCookie(httptest.NewRequest(http.MethodGet, "/api/v1/nodes/"+nodeID, nil), ownerCookie))
-	if strings.Contains(res.Body.String(), "203.0.113.99") || !strings.Contains(res.Body.String(), "203.0.*.*") {
+	if strings.Contains(res.Body.String(), "203.0.113.99") || strings.Contains(res.Body.String(), "2001:db8:abcd:12::99") || !strings.Contains(res.Body.String(), "203.0.*.*") || !strings.Contains(res.Body.String(), "2001:db8:abcd:12:0:0:*:*") {
 		t.Fatalf("default node response leaked or failed to mask IP: %s", res.Body.String())
 	}
 	res = httptest.NewRecorder()
 	api.Handler().ServeHTTP(res, withCookie(httptest.NewRequest(http.MethodGet, "/api/v1/nodes/"+nodeID+"?full_ip=true", nil), ownerCookie))
-	if !strings.Contains(res.Body.String(), `"ip_address":"203.0.113.99"`) {
-		t.Fatalf("owner could not reveal full IP: %s", res.Body.String())
+	if !strings.Contains(res.Body.String(), `"ip_address":"203.0.113.99"`) || !strings.Contains(res.Body.String(), `"ip_address":"2001:db8:abcd:12::99"`) || !strings.Contains(res.Body.String(), `"families":[4,6]`) {
+		t.Fatalf("owner could not reveal both full IP families: %s", res.Body.String())
+	}
+	settingsBody := []byte(`{"scan_interval_minutes":1440}`)
+	res = httptest.NewRecorder()
+	api.Handler().ServeHTTP(res, withCookie(httptest.NewRequest(http.MethodPatch, "/api/v1/nodes/"+nodeID+"/settings", bytes.NewReader(settingsBody)), ownerCookie))
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"scan_interval_minutes":1440`) {
+		t.Fatalf("owner could not adjust scan interval: %d %s", res.Code, res.Body.String())
 	}
 	res = httptest.NewRecorder()
 	api.Handler().ServeHTTP(res, withCookie(httptest.NewRequest(http.MethodGet, "/api/v1/nodes/"+nodeID+"?full_ip=true", nil), memberCookie))
 	if res.Code != http.StatusNotFound {
 		t.Fatalf("unrelated member accessed node: %d %s", res.Code, res.Body.String())
+	}
+}
+
+func TestPublicDashboardIsAnonymousAndIPSafe(t *testing.T) {
+	api, _ := testAPI()
+	api.store = store.NewMemory(true)
+	res := httptest.NewRecorder()
+	api.Handler().ServeHTTP(res, httptest.NewRequest(http.MethodGet, "/api/v1/public/dashboard", nil))
+	if res.Code != http.StatusOK {
+		t.Fatalf("public dashboard: %d %s", res.Code, res.Body.String())
+	}
+	body := res.Body.String()
+	if strings.Contains(body, "103.145.12.81") || !strings.Contains(body, "103.145.*.*") {
+		t.Fatalf("public dashboard leaked or failed to mask IP: %s", body)
+	}
+	if !strings.Contains(body, `"rankings"`) || !strings.Contains(body, `"alerts":[]`) {
+		t.Fatalf("public dashboard shape is unsafe or incomplete: %s", body)
 	}
 }
 

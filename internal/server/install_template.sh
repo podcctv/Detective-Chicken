@@ -110,27 +110,10 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 UNIT
-  cat >/etc/systemd/system/detective-chicken-scan.service <<'UNIT'
-[Unit]
-Description=Detective Chicken IP quality scan
-After=network-online.target
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/detective-chicken-agent --family 4 scan
-Nice=10
-UNIT
-  cat >/etc/systemd/system/detective-chicken-scan.timer <<'UNIT'
-[Unit]
-Description=Detective Chicken scan timer
-[Timer]
-OnCalendar=*-*-* 00,06,12,18:00:00
-RandomizedDelaySec=30m
-Persistent=true
-[Install]
-WantedBy=timers.target
-UNIT
+  systemctl disable --now detective-chicken-scan.timer >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/detective-chicken-scan.service /etc/systemd/system/detective-chicken-scan.timer
   systemctl daemon-reload
-  systemctl enable --now detective-chicken-heartbeat.timer detective-chicken-scan.timer
+  systemctl enable --now detective-chicken-heartbeat.timer
 }
 
 install_cron() {
@@ -143,11 +126,11 @@ install_cron() {
   if [ -d /etc/cron.d ]; then
     cat >/etc/cron.d/detective-chicken <<'CRON'
 */2 * * * * root /usr/local/bin/detective-chicken-agent heartbeat >/dev/null 2>&1
-17 */6 * * * root /usr/local/bin/detective-chicken-agent --family 4 scan >/dev/null 2>&1
 CRON
     chmod 0644 /etc/cron.d/detective-chicken
   elif [ -d /etc/crontabs ]; then
-    printf '%s\n' '*/2 * * * * /usr/local/bin/detective-chicken-agent heartbeat >/dev/null 2>&1' '17 */6 * * * /usr/local/bin/detective-chicken-agent --family 4 scan >/dev/null 2>&1' >>/etc/crontabs/root
+    sed -i '/detective-chicken-agent.* scan/d' /etc/crontabs/root 2>/dev/null || true
+    grep -q 'detective-chicken-agent heartbeat' /etc/crontabs/root 2>/dev/null || printf '%s\n' '*/2 * * * * /usr/local/bin/detective-chicken-agent heartbeat >/dev/null 2>&1' >>/etc/crontabs/root
   else
     return 1
   fi
@@ -160,8 +143,6 @@ install_loop() {
 #!/bin/sh
 while :; do
   /usr/local/bin/detective-chicken-agent heartbeat >/dev/null 2>&1 || true
-  now=$(date +%s)
-  [ $((now % 21600)) -lt 120 ] && /usr/local/bin/detective-chicken-agent --family 4 scan >/dev/null 2>&1 || true
   sleep 120
 done
 LOOP
@@ -176,6 +157,6 @@ elif ! install_cron; then
   install_loop
 fi
 
-"$AGENT" heartbeat
-("$AGENT" --family 4 scan >/var/log/detective-chicken-first-scan.log 2>&1 &) || true
+echo "Starting the first IPv4/IPv6 quality report. This usually takes 1-3 minutes and at most 8 minutes."
+"$AGENT" heartbeat 2>&1 | tee /var/log/detective-chicken-first-scan.log
 echo "Detective Chicken installed and enrolled successfully."

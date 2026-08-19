@@ -32,9 +32,12 @@ func (a *API) Handler() http.Handler { return a.handler }
 
 func (a *API) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"status": "ok", "time": time.Now().UTC(), "version": "0.2.0"})
+		writeJSON(w, 200, map[string]any{"status": "ok", "time": time.Now().UTC(), "version": "0.3.0"})
 	})
 	mux.HandleFunc("GET /api/v1/auth/status", a.authStatus)
+	mux.HandleFunc("GET /api/v1/public/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, a.store.PublicDashboard())
+	})
 	mux.HandleFunc("POST /api/v1/auth/register", a.registerUser)
 	mux.HandleFunc("POST /api/v1/auth/login", a.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", a.authenticated(a.logout))
@@ -56,6 +59,7 @@ func (a *API) routes(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"items": a.store.NodesFor(p.User.ID, p.User.Role == "admin")})
 	}))
 	mux.HandleFunc("GET /api/v1/nodes/{id}", a.authenticated(a.node))
+	mux.HandleFunc("PATCH /api/v1/nodes/{id}/settings", a.authenticated(a.nodeSettings))
 	mux.HandleFunc("GET /api/v1/nodes/{id}/series", a.authenticated(a.series))
 	mux.HandleFunc("GET /api/v1/alerts", a.authenticated(func(w http.ResponseWriter, r *http.Request) {
 		p := requestPrincipal(r)
@@ -121,6 +125,28 @@ func (a *API) scan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 202, map[string]any{"accepted": true, "command": c})
 }
 
+func (a *API) nodeSettings(w http.ResponseWriter, r *http.Request) {
+	p := requestPrincipal(r)
+	nodeID := r.PathValue("id")
+	if !a.store.CanAccessNode(nodeID, p.User.ID, p.User.Role == "admin") {
+		apiError(w, http.StatusNotFound, "NODE_NOT_FOUND", "node not found")
+		return
+	}
+	var in struct {
+		ScanIntervalMinutes int `json:"scan_interval_minutes"`
+	}
+	if err := decode(r, &in, 8<<10); err != nil || in.ScanIntervalMinutes < 30 || in.ScanIntervalMinutes > 10080 {
+		apiError(w, http.StatusBadRequest, "INVALID_INTERVAL", "scan_interval_minutes must be between 30 and 10080")
+		return
+	}
+	node, err := a.store.UpdateNodeScanInterval(nodeID, in.ScanIntervalMinutes)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "NODE_NOT_FOUND", "node not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, node)
+}
+
 func (a *API) enrollment(w http.ResponseWriter, r *http.Request) {
 	principal := requestPrincipal(r)
 	var in struct {
@@ -128,12 +154,20 @@ func (a *API) enrollment(w http.ResponseWriter, r *http.Request) {
 		OSFamily               string `json:"os_family"`
 		Platform               string `json:"platform"`
 		Arch                   string `json:"arch"`
+		ScanIntervalMinutes    int    `json:"scan_interval_minutes"`
 	}
 	if err := decode(r, &in, 32<<10); err != nil || strings.TrimSpace(in.Name) == "" {
 		apiError(w, 400, "INVALID_PAYLOAD", "name is required")
 		return
 	}
-	e := a.store.CreateEnrollment(principal.TenantID, principal.User.ID, in.Name, in.Provider, in.Region, in.OSFamily, in.Platform, in.Arch)
+	if in.ScanIntervalMinutes == 0 {
+		in.ScanIntervalMinutes = store.DefaultScanIntervalMinutes
+	}
+	if in.ScanIntervalMinutes < 30 || in.ScanIntervalMinutes > 10080 {
+		apiError(w, http.StatusBadRequest, "INVALID_INTERVAL", "scan_interval_minutes must be between 30 and 10080")
+		return
+	}
+	e := a.store.CreateEnrollment(principal.TenantID, principal.User.ID, in.Name, in.Provider, in.Region, in.OSFamily, in.Platform, in.Arch, in.ScanIntervalMinutes)
 	installURL := publicBaseURL(r) + "/api/v1/install/" + e.Token + ".sh"
 	writeJSON(w, 201, map[string]any{"token": e.Token, "expires_at": e.ExpiresAt, "max_uses": 1, "install_url": installURL, "install_command": "curl -fsSL '" + installURL + "' | sudo sh"})
 }
@@ -206,7 +240,14 @@ func (a *API) heartbeat(w http.ResponseWriter, r *http.Request, body []byte, age
 		apiError(w, 404, "NODE_NOT_FOUND", err.Error())
 		return
 	}
-	writeJSON(w, 202, map[string]any{"accepted": true})
+	due, interval, _ := a.store.ScanDirective(agent.NodeID)
+	commands := a.store.Commands(agent.AgentID)
+	for _, command := range commands {
+		if command.Type == "scan" {
+			due = true
+		}
+	}
+	writeJSON(w, 202, map[string]any{"accepted": true, "scan_due": due, "scan_interval_minutes": interval, "commands": commands})
 }
 func (a *API) report(w http.ResponseWriter, r *http.Request, body []byte, agent store.AgentKey) {
 	var report model.Report

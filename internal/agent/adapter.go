@@ -43,10 +43,19 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return model.Report{}, fmt.Errorf("ipquality failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+	err := cmd.Run()
+	return finishCollection(stdout.Bytes(), stderr.String(), err, family)
+}
+
+func finishCollection(stdout []byte, stderr string, runErr error, family int) (model.Report, error) {
+	report, parseErr := ParseIPQuality(stdout, family)
+	if parseErr == nil {
+		return report, nil
 	}
-	return ParseIPQuality(stdout.Bytes(), family)
+	if runErr != nil {
+		return model.Report{}, fmt.Errorf("ipquality failed: %w: %s", runErr, strings.TrimSpace(stderr))
+	}
+	return model.Report{}, parseErr
 }
 
 func ParseIPQuality(raw []byte, family int) (model.Report, error) {

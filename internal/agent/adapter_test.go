@@ -1,6 +1,9 @@
 package agent
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestParseIPQualityWithNoiseAndMissingFields(t *testing.T) {
 	raw := []byte("checking...\n{\"Head\":{\"Version\":\"v2026-08-09\"},\"Info\":{\"IP\":\"203.0.113.8\",\"ASN\":64500,\"Organization\":\"Example\",\"CountryCode\":\"US\"},\"Type\":{\"UsageType\":\"hosting\"},\"Score\":{\"IPQS\":18},\"Factor\":{\"Proxy\":false},\"Media\":{},\"Mail\":{}}\ndone")
@@ -19,5 +22,13 @@ func TestParseIPQualityWithNoiseAndMissingFields(t *testing.T) {
 func TestParseIPQualityRejectsNonJSON(t *testing.T) {
 	if _, err := ParseIPQuality([]byte("network failed"), 4); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestCollectorAcceptsValidJSONDespiteUpstreamExitCode(t *testing.T) {
+	raw := []byte(`{"Info":{"IP":"203.0.113.8","ASN":64500},"Score":{"IPQS":18},"Factor":{},"Media":{},"Mail":{}}`)
+	report, err := finishCollection(raw, "upstream returned status 1", errors.New("exit status 1"), 4)
+	if err != nil || report.Network.ReportedIP != "203.0.113.8" {
+		t.Fatalf("valid report was discarded: %#v %v", report, err)
 	}
 }

@@ -15,9 +15,10 @@
 - 节点资产：按创建者隔离，IPv4/IPv6 默认隐藏最后两段；节点所有者和管理员可按需查看完整 IP。
 - 节点详情：质量评分、风险因子、解锁矩阵、趋势、告警、网络身份和最近采集器信息。
 - 质量首页：小鸡质量排行榜、Netflix/ChatGPT 解锁矩阵、风险趋势和变化型告警。
+- 公开看板：完成首个管理员注册后，未登录访客可查看脱敏 IP、质量排名和核心解锁结果；完整 IP、Agent、告警和控制操作仍仅限登录账户。
 - 变化追踪：风险分趋势、IP/ASN/解锁能力变化和变化型告警。
 - Agent 身份：一次性注册凭证，本机生成 Ed25519 私钥，请求摘要、时间戳、nonce 和重放拦截。
-- IPQuality 适配器：IPv4/IPv6 分开执行，默认 `-j -p`，宽松解析并保留原始 JSON。
+- IPQuality 适配器：自动识别可用 IPv4/IPv6 并行执行，默认 `-j -p`；只要上游输出可解析 JSON，即使上游返回非零状态也保留有效报告。
 - 兼容安装：按 Debian/Alpine/RHEL/Arch、AMD64/ARM64/ARMv7 和 PVE/独服/LXC/Docker/Podman/Incus 生成脚本，自动选择 systemd、OpenRC/cron 或容器循环。
 - 持久化：默认将账户、会话、节点、Agent、报告与设置保存到权限受限的 JSON 快照；PostgreSQL/TimescaleDB 契约保留为规模化升级路径。
 - 数据契约：OpenAPI 3.1、JSON Schema 2020-12、PostgreSQL/TimescaleDB 初始化脚本。
@@ -83,11 +84,12 @@ detective.428048.xyz {
 go build -o detective-chicken-agent ./cmd/agent
 ./detective-chicken-agent --server https://detective-chicken.example.com --token 'et_xxx' enroll
 ./detective-chicken-agent heartbeat
+./detective-chicken-agent --family auto scan
 ./detective-chicken-agent --family 4 scan
 ./detective-chicken-agent --family 6 scan
 ```
 
-Agent 配置默认写入 `/etc/detective-chicken/agent.json`，权限为 `0600`。完整扫描会访问多个第三方服务，不应高频执行；默认建议 6–24 小时并增加随机抖动，心跳则保持 1–5 分钟。
+Agent 配置默认写入 `/etc/detective-chicken/agent.json`，权限为 `0600`。安装脚本会立即完成第一次心跳并并行扫描可用的 IPv4/IPv6，实测通常约 1–3 分钟，单次最多 8 分钟。心跳固定每 2 分钟检查一次服务器指令；质量扫描默认每 6 小时，可在创建安装命令时选择，也可在节点详情中修改为 1 小时到 1 周。服务器调度会在下一次心跳生效，因此“立即扫描”通常在 2 分钟内开始。
 
 ## API 与测试
 

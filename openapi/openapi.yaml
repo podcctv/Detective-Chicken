@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Detective Chicken API
-  version: 0.2.0
+  version: 0.3.0
   description: Detective Chicken control-plane and signed Agent ingest API for continuous VPS IP identity, risk and unlock monitoring.
 servers:
   - url: /api/v1
@@ -17,6 +17,12 @@ paths:
       security: [{ sessionCookie: [] }]
       responses:
         "200": { description: Fleet dashboard snapshot }
+  /public/dashboard:
+    get:
+      operationId: getPublicDashboard
+      description: Anonymous masked IP quality, rankings and unlock snapshot. Never includes alerts, complete addresses or control credentials.
+      responses:
+        "200": { description: Public quality dashboard snapshot }
   /nodes:
     get:
       operationId: listNodes
@@ -41,6 +47,23 @@ paths:
       security: [{ sessionCookie: [] }]
       responses:
         "200": { description: Risk time series }
+  /nodes/{id}/settings:
+    patch:
+      operationId: updateNodeSettings
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scan_interval_minutes]
+              properties:
+                scan_interval_minutes: { type: integer, minimum: 30, maximum: 10080, default: 360 }
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Per-node scan interval updated }
   /nodes/{id}/scan:
     post:
       operationId: createScan
@@ -66,6 +89,7 @@ paths:
                 os_family: { type: string, enum: [auto, debian, alpine, rhel, arch] }
                 platform: { type: string, enum: [auto, pve, baremetal, lxc, docker, podman, incus] }
                 arch: { type: string, enum: [auto, amd64, arm64, armv7] }
+                scan_interval_minutes: { type: integer, minimum: 30, maximum: 10080, default: 360 }
       responses:
         "201": { description: One-time enrollment token }
       security: [{ sessionCookie: [] }]
@@ -163,7 +187,7 @@ paths:
       operationId: submitHeartbeat
       security: [{ messageSignature: [] }]
       responses:
-        "202": { description: Heartbeat accepted }
+        "202": { description: Heartbeat accepted with scan_due, scan_interval_minutes and queued commands }
         "409": { description: Replay detected }
   /reports:
     post:

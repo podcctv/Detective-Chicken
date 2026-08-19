@@ -1,6 +1,7 @@
 package store
 
 import (
+	"crypto/ed25519"
 	"path/filepath"
 	"testing"
 )
@@ -35,6 +36,19 @@ func TestPersistentAccountsAndSessions(t *testing.T) {
 	}
 	if !reloaded.PublicSettings().RegistrationEnabled || len(reloaded.Users()) != 2 {
 		t.Fatalf("settings or users did not survive reload: %#v", reloaded.PublicSettings())
+	}
+}
+
+func TestPublicDashboardRemovesControlPlaneIdentifiers(t *testing.T) {
+	st := NewMemory(false)
+	enrollment := st.CreateEnrollment("tenant_secret", "owner_secret", "Public Node", "Provider", "Region", "auto", "lxc", "amd64", 60)
+	_, _, err := st.Register(enrollment.Token, make([]byte, ed25519.PublicKeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dashboard := st.PublicDashboard()
+	if len(dashboard.Nodes) != 1 || dashboard.Nodes[0].AgentID != "" || dashboard.Nodes[0].TenantID != "" || dashboard.Nodes[0].ScanIntervalMinutes != 60 {
+		t.Fatalf("public node leaked identifiers or lost safe schedule metadata: %#v", dashboard.Nodes)
 	}
 }
 
