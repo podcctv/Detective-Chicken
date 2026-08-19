@@ -13,6 +13,7 @@ import (
 type diskState struct {
 	Version             int                           `json:"version"`
 	Nodes               map[string]model.Node         `json:"nodes"`
+	NodeOwners          map[string]string             `json:"node_owners,omitempty"`
 	Series              map[string][]model.TrendPoint `json:"series"`
 	Alerts              []model.Alert                 `json:"alerts"`
 	Agents              map[string]AgentKey           `json:"agents"`
@@ -56,6 +57,7 @@ func NewPersistent(path string, seed bool) (*Memory, error) {
 	m.restoreReportedIPs()
 	m.commands = nonNil(state.Commands)
 	m.users = nonNil(state.Users)
+	m.restoreNodeOwners(state.NodeOwners)
 	m.sessions = nonNil(state.Sessions)
 	m.passwordResets = nonNil(state.PasswordResets)
 	m.registrationEnabled = state.RegistrationEnabled
@@ -64,6 +66,29 @@ func NewPersistent(path string, seed bool) (*Memory, error) {
 		m.usernames[normalizeUsername(account.User.Username)] = id
 	}
 	return m, nil
+}
+
+func (m *Memory) restoreNodeOwners(owners map[string]string) {
+	for nodeID, ownerID := range owners {
+		node, ok := m.nodes[nodeID]
+		if ok && ownerID != "" {
+			node.OwnerUserID = ownerID
+			m.nodes[nodeID] = node
+		}
+	}
+	if len(owners) != 0 || len(m.users) != 1 {
+		return
+	}
+	var onlyUserID string
+	for userID := range m.users {
+		onlyUserID = userID
+	}
+	for nodeID, node := range m.nodes {
+		if node.OwnerUserID == "" {
+			node.OwnerUserID = onlyUserID
+			m.nodes[nodeID] = node
+		}
+	}
 }
 
 func (m *Memory) restoreReportedIPs() {
@@ -112,7 +137,13 @@ func (m *Memory) writeStateLocked() error {
 	if m.dataPath == "" {
 		return nil
 	}
-	state := diskState{Version: 1, Nodes: m.nodes, Series: m.series, Alerts: m.alerts, Agents: m.agents, Enrollments: m.enrollments, Reports: m.reports, Commands: m.commands, Users: m.users, Sessions: m.sessions, PasswordResets: m.passwordResets, RegistrationEnabled: m.registrationEnabled}
+	nodeOwners := make(map[string]string, len(m.nodes))
+	for nodeID, node := range m.nodes {
+		if node.OwnerUserID != "" {
+			nodeOwners[nodeID] = node.OwnerUserID
+		}
+	}
+	state := diskState{Version: 2, Nodes: m.nodes, NodeOwners: nodeOwners, Series: m.series, Alerts: m.alerts, Agents: m.agents, Enrollments: m.enrollments, Reports: m.reports, Commands: m.commands, Users: m.users, Sessions: m.sessions, PasswordResets: m.passwordResets, RegistrationEnabled: m.registrationEnabled}
 	raw, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
