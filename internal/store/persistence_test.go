@@ -50,6 +50,9 @@ func TestPublicDashboardRemovesControlPlaneIdentifiers(t *testing.T) {
 	if len(dashboard.Nodes) != 1 || dashboard.Nodes[0].AgentID != "" || dashboard.Nodes[0].TenantID != "" || dashboard.Nodes[0].ScanIntervalMinutes != 60 {
 		t.Fatalf("public node leaked identifiers or lost safe schedule metadata: %#v", dashboard.Nodes)
 	}
+	if dashboard.Nodes[0].CanViewFullIP || dashboard.Nodes[0].IPAddress != dashboard.Nodes[0].MaskedIP {
+		t.Fatalf("public node was granted full-IP access: %#v", dashboard.Nodes[0])
+	}
 }
 
 func TestMaskIPLastTwoSegments(t *testing.T) {

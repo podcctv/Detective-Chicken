@@ -278,7 +278,7 @@ func nodeView(raw model.Node, userID string, admin, fullIP bool) model.Node {
 	if view.ScanIntervalMinutes == 0 {
 		view.ScanIntervalMinutes = DefaultScanIntervalMinutes
 	}
-	view.CanViewFullIP = admin || raw.OwnerUserID == userID
+	view.CanViewFullIP = admin || (userID != "" && raw.OwnerUserID == userID)
 	view.IPAddress = raw.MaskedIP
 	if fullIP && view.CanViewFullIP {
 		view.IPAddress = raw.ReportedIP
