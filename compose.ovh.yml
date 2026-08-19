@@ -1,0 +1,41 @@
+name: detective-chicken
+
+services:
+  api:
+    build:
+      context: .
+    restart: unless-stopped
+    environment:
+      DETECTIVE_CHICKEN_ADDR: ":8080"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/detective-chicken-server", "-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  web:
+    build:
+      context: ./web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "80"
+    networks:
+      default: {}
+      caddy:
+        aliases:
+          - detective-chicken-web
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+networks:
+  caddy:
+    external: true
+    name: pt-suite_default

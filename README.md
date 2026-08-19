@@ -50,6 +50,25 @@ docker compose --profile production-data up --build
 
 当前 `v0.1.0` 为可运行 MVP，API 使用进程内演示存储；生产上线前应按 [架构说明](docs/architecture.md) 接入 PostgreSQL repository、用户认证和分布式 nonce cache。数据库迁移已经固定核心表、hypertable、RLS 与 retention 基线。
 
+### OVH + Caddy
+
+OVH 部署使用独立 Compose 文件，不发布宿主机端口；Web 容器通过外部 Docker 网络 `pt-suite_default` 接入已有 Caddy：
+
+```bash
+docker compose -f compose.ovh.yml up -d --build
+```
+
+Caddy 站点配置：
+
+```caddyfile
+detective.428048.xyz {
+	import common_secure
+	reverse_proxy detective-chicken-web:80
+}
+```
+
+部署前需要确认 `pt-suite_default` 已存在，且域名 A/AAAA 记录指向服务器。配置变更后先执行 `caddy validate`，再热加载 Caddy。
+
 ## Agent 流程
 
 先在控制台“添加 VPS”创建一次性 token，然后在目标 Linux VPS 上安装 Agent。也可以手动构建和注册：
