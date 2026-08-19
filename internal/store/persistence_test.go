@@ -4,6 +4,9 @@ import (
 	"crypto/ed25519"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/podcctv/detective-chicken/internal/model"
 )
 
 func TestPersistentAccountsAndSessions(t *testing.T) {
@@ -52,6 +55,32 @@ func TestPublicDashboardRemovesControlPlaneIdentifiers(t *testing.T) {
 	}
 	if dashboard.Nodes[0].CanViewFullIP || dashboard.Nodes[0].IPAddress != dashboard.Nodes[0].MaskedIP {
 		t.Fatalf("public node was granted full-IP access: %#v", dashboard.Nodes[0])
+	}
+}
+
+func TestPersistentStoreRestoresPrivateIPFromLatestReport(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	st, err := NewPersistent(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrollment := st.CreateEnrollment("tenant", "owner", "Node", "Provider", "Region", "auto", "lxc", "amd64", 360)
+	node, agentKey, err := st.Register(enrollment.Token, make([]byte, ed25519.PublicKeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := model.Report{ReportID: "report-v4", NodeID: node.ID, AgentID: agentKey.AgentID, CollectedAt: time.Now().UTC(), Network: model.Network{Family: 4, ReportedIP: "203.0.113.99"}}
+	if err := st.SaveReport(report); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := NewPersistent(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := reloaded.NodeDetailFor(node.ID, "owner", false, true)
+	if err != nil || detail.IPAddress != "203.0.113.99" || detail.MaskedIP != "203.0.*.*" {
+		t.Fatalf("private IP was not restored after restart: %#v %v", detail.Node, err)
 	}
 }
 

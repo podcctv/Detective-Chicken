@@ -53,6 +53,7 @@ func NewPersistent(path string, seed bool) (*Memory, error) {
 	m.agents = nonNil(state.Agents)
 	m.enrollments = nonNil(state.Enrollments)
 	m.reports = nonNil(state.Reports)
+	m.restoreReportedIPs()
 	m.commands = nonNil(state.Commands)
 	m.users = nonNil(state.Users)
 	m.sessions = nonNil(state.Sessions)
@@ -63,6 +64,29 @@ func NewPersistent(path string, seed bool) (*Memory, error) {
 		m.usernames[normalizeUsername(account.User.Username)] = id
 	}
 	return m, nil
+}
+
+func (m *Memory) restoreReportedIPs() {
+	latest := make(map[string]model.Report)
+	for _, report := range m.reports {
+		node, ok := m.nodes[report.NodeID]
+		if !ok || report.Network.ReportedIP == "" {
+			continue
+		}
+		if node.Family != 0 && report.Network.Family != node.Family {
+			continue
+		}
+		current, ok := latest[report.NodeID]
+		if !ok || report.CollectedAt.After(current.CollectedAt) {
+			latest[report.NodeID] = report
+		}
+	}
+	for nodeID, report := range latest {
+		node := m.nodes[nodeID]
+		node.ReportedIP = report.Network.ReportedIP
+		node.MaskedIP = MaskIP(report.Network.ReportedIP)
+		m.nodes[nodeID] = node
+	}
 }
 
 func nonNil[K comparable, V any](value map[K]V) map[K]V {
