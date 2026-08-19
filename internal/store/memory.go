@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/podcctv/jijian/internal/model"
+	"github.com/podcctv/detective-chicken/internal/model"
 )
 
 var ErrNotFound = errors.New("not found")

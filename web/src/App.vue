@@ -81,10 +81,10 @@ const createEnrollment = async () => {
 
 const installCommand = computed(() => enrollment.value ? `curl -fsSL https://agent.example.com/install.sh | sudo bash -s -- --server '${location.origin}' --enroll '${enrollment.value.token}'` : '')
 const copyCommand = async () => { await navigator.clipboard.writeText(installCommand.value); showToast('安装命令已复制') }
-const toggleDark = () => { dark.value = !dark.value; document.documentElement.dataset.theme = dark.value ? 'dark' : 'light'; localStorage.setItem('jijian-theme', dark.value ? 'dark' : 'light'); nextTick(() => window.dispatchEvent(new Event('resize'))) }
+const toggleDark = () => { dark.value = !dark.value; document.documentElement.dataset.theme = dark.value ? 'dark' : 'light'; localStorage.setItem('detective-chicken-theme', dark.value ? 'dark' : 'light'); nextTick(() => window.dispatchEvent(new Event('resize'))) }
 
 const closeOverlay = (event: KeyboardEvent) => { if (event.key === 'Escape') { selected.value = null; enrollOpen.value = false; menuOpen.value = false } }
-onMounted(() => { dark.value = localStorage.getItem('jijian-theme') === 'dark'; document.documentElement.dataset.theme = dark.value ? 'dark' : 'light'; window.addEventListener('keydown', closeOverlay); load() })
+onMounted(() => { dark.value = localStorage.getItem('detective-chicken-theme') === 'dark'; document.documentElement.dataset.theme = dark.value ? 'dark' : 'light'; window.addEventListener('keydown', closeOverlay); load() })
 onBeforeUnmount(() => window.removeEventListener('keydown', closeOverlay))
 </script>
 
@@ -92,7 +92,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOverlay))
   <div class="app-shell">
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <aside class="sidebar" :class="{ open: menuOpen }">
-      <div class="brand"><div class="brand-mark">鉴</div><div><strong>鸡鉴</strong><span>IP QUALITY OPS</span></div><button class="icon-btn mobile-close" aria-label="关闭菜单" @click="menuOpen = false"><X :size="19" /></button></div>
+      <div class="brand"><div class="brand-mark">探</div><div><strong>鸡探长</strong><span>DETECTIVE CHICKEN</span></div><button class="icon-btn mobile-close" aria-label="关闭菜单" @click="menuOpen = false"><X :size="19" /></button></div>
       <nav aria-label="主导航">
         <a class="nav-item active" href="#dashboard"><LayoutDashboard :size="18" /><span>总览</span></a>
         <a class="nav-item" href="#fleet"><Server :size="18" /><span>节点资产</span><small>{{ data.stats.total }}</small></a>
@@ -162,7 +162,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOverlay))
           <div v-if="filteredNodes.length === 0" class="empty-state"><Search :size="24" /><strong>没有匹配的节点</strong><span>调整搜索词或状态筛选</span></div>
         </div>
       </section>
-      <footer><span>鸡鉴 · 数据默认仅租户可见，IP 已脱敏</span><span>心跳 2 min · 完整扫描 6 h + jitter</span></footer>
+      <footer><span>鸡探长 · Detective Chicken · 数据默认仅租户可见，IP 已脱敏</span><span>心跳 2 min · 完整扫描 6 h + jitter</span></footer>
     </main>
 
     <Transition name="drawer"><div v-if="selected" class="drawer-backdrop" @click.self="selected = null"><aside class="detail-drawer" aria-label="节点详情">

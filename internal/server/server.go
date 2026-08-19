@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/podcctv/jijian/internal/model"
-	"github.com/podcctv/jijian/internal/store"
+	"github.com/podcctv/detective-chicken/internal/model"
+	"github.com/podcctv/detective-chicken/internal/store"
 )
 
 type API struct {

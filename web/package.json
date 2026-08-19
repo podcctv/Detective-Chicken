@@ -1,5 +1,6 @@
 {
-  "name": "jijian-console",
+  "name": "detective-chicken-console",
+  "description": "Detective Chicken web console for continuous VPS IP quality monitoring.",
   "private": true,
   "version": "0.1.0",
   "type": "module",

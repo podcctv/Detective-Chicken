@@ -1,6 +1,6 @@
 # Architecture
 
-JiJian treats IP.Check.Place as an external collector process, not as the platform identity or data model.
+Detective Chicken（鸡探长）treats IP.Check.Place as an external collector process, not as the platform identity or data model. The platform continuously investigates VPS public IP identity, risk and unlock-capability changes while keeping its own stable Agent and canonical data contracts.
 
 ```text
 IP.Check.Place -4/-6 -j -p

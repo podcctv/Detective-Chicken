@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: JiJian API
+  title: Detective Chicken API
   version: 0.1.0
-  description: VPS IP quality monitoring control-plane and signed agent ingest API.
+  description: Detective Chicken control-plane and signed Agent ingest API for continuous VPS IP identity, risk and unlock monitoring.
 servers:
   - url: /api/v1
 paths:

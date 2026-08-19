@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/podcctv/jijian/internal/server"
-	"github.com/podcctv/jijian/internal/store"
+	"github.com/podcctv/detective-chicken/internal/server"
+	"github.com/podcctv/detective-chicken/internal/store"
 )
 
 func main() {
@@ -22,13 +22,13 @@ func main() {
 		_ = res.Body.Close()
 		return
 	}
-	addr := os.Getenv("JIJIAN_ADDR")
+	addr := os.Getenv("DETECTIVE_CHICKEN_ADDR")
 	if addr == "" {
 		addr = ":8080"
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	api := server.New(store.NewMemory(true), logger)
-	logger.Info("JiJian API listening", "addr", addr)
+	logger.Info("Detective Chicken API listening", "addr", addr)
 	if err := http.ListenAndServe(addr, api.Handler()); err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)

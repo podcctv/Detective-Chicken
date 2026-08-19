@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** JiJian
+**Project:** 鸡探长（Detective Chicken）
 **Generated:** 2026-08-19 08:59:52
 **Category:** Smart Home/IoT Dashboard
 **Design Dials:** Variance 4/10 (Balanced / Modern) | Motion 3/10 (Subtle) | Density 8/10 (Dense / Dashboard)

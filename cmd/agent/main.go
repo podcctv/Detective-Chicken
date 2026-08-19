@@ -8,22 +8,22 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/podcctv/jijian/internal/agent"
+	"github.com/podcctv/detective-chicken/internal/agent"
 )
 
 func main() {
-	configDefault := "/etc/jijian/agent.json"
+	configDefault := "/etc/detective-chicken/agent.json"
 	if dir, err := os.UserConfigDir(); err == nil && runtime.GOOS == "windows" {
-		configDefault = filepath.Join(dir, "jijian", "agent.json")
+		configDefault = filepath.Join(dir, "detective-chicken", "agent.json")
 	}
 	configPath := flag.String("config", configDefault, "agent config path")
-	serverURL := flag.String("server", "http://127.0.0.1:8080", "JiJian API base URL")
+	serverURL := flag.String("server", "http://127.0.0.1:8080", "Detective Chicken API base URL")
 	token := flag.String("token", "", "one-time enrollment token")
 	family := flag.Int("family", 4, "IP family to scan: 4 or 6")
 	scriptURL := flag.String("script-url", "https://IP.Check.Place", "IPQuality script URL")
 	flag.Parse()
 	if flag.NArg() == 0 {
-		fatal("usage: jijian-agent [flags] <enroll|heartbeat|scan>")
+		fatal("usage: detective-chicken-agent [flags] <enroll|heartbeat|scan>")
 	}
 	switch flag.Arg(0) {
 	case "enroll":
@@ -62,4 +62,4 @@ func load(path string) *agent.Client {
 	}
 	return &agent.Client{Config: cfg}
 }
-func fatal(message string) { fmt.Fprintln(os.Stderr, "jijian-agent:", message); os.Exit(1) }
+func fatal(message string) { fmt.Fprintln(os.Stderr, "detective-chicken-agent:", message); os.Exit(1) }

@@ -1,5 +1,5 @@
 [Unit]
-Description=Send JiJian heartbeat every two minutes
+Description=Send Detective Chicken heartbeat every two minutes
 
 [Timer]
 OnBootSec=2m

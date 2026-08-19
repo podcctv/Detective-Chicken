@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/podcctv/jijian/internal/model"
+	"github.com/podcctv/detective-chicken/internal/model"
 )
 
 type Adapter struct {
@@ -39,7 +39,7 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	if family == 6 {
 		flag = "-6"
 	}
-	cmd := exec.CommandContext(ctx, "bash", "-c", `curl -fsSL --proto '=https' --tlsv1.2 "$1" | bash -s -- "$2" -j -p`, "jijian-ipquality", url, flag)
+	cmd := exec.CommandContext(ctx, "bash", "-c", `curl -fsSL --proto '=https' --tlsv1.2 "$1" | bash -s -- "$2" -j -p`, "detective-chicken-ipquality", url, flag)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

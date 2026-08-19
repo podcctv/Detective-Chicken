@@ -1,6 +1,8 @@
-# 鸡鉴
+# 鸡探长（Detective Chicken）
 
-鸡鉴是一个面向 VPS 舰队的 IP 质量持续监测与自动上报平台。它把 `IP.Check.Place` 作为可替换的外部检测器，通过自己的 Agent、Canonical JSON、Ed25519 设备身份和变化型告警，把一次性终端报告变成可追踪的 IP 资产档案。
+鸡探长（Detective Chicken）是一套面向 VPS 舰队的 IP 质量持续监测与自动上报平台。它持续巡查每台“小鸡”的公网 IP 身份、风险评分、流媒体与 AI 解锁能力及 DNSBL 变化，并把一次性终端检测升级为可追踪、可告警的长期 IP 资产档案。
+
+平台将 `IP.Check.Place` 作为可替换的外部检测器，通过自有 Agent、Canonical JSON、Ed25519 设备身份和变化型告警构成完整监测闭环。
 
 ![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3-42b883?logo=vuedotjs&logoColor=white)
@@ -53,14 +55,14 @@ docker compose --profile production-data up --build
 先在控制台“添加 VPS”创建一次性 token，然后在目标 Linux VPS 上安装 Agent。也可以手动构建和注册：
 
 ```bash
-go build -o jijian-agent ./cmd/agent
-./jijian-agent --server https://jijian.example.com --token 'et_xxx' enroll
-./jijian-agent heartbeat
-./jijian-agent --family 4 scan
-./jijian-agent --family 6 scan
+go build -o detective-chicken-agent ./cmd/agent
+./detective-chicken-agent --server https://detective-chicken.example.com --token 'et_xxx' enroll
+./detective-chicken-agent heartbeat
+./detective-chicken-agent --family 4 scan
+./detective-chicken-agent --family 6 scan
 ```
 
-Agent 配置默认写入 `/etc/jijian/agent.json`，权限为 `0600`。完整扫描会访问多个第三方服务，不应高频执行；默认建议 6–24 小时并增加随机抖动，心跳则保持 1–5 分钟。
+Agent 配置默认写入 `/etc/detective-chicken/agent.json`，权限为 `0600`。完整扫描会访问多个第三方服务，不应高频执行；默认建议 6–24 小时并增加随机抖动，心跳则保持 1–5 分钟。
 
 ## API 与测试
 

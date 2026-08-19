@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/podcctv/jijian/internal/store"
+	"github.com/podcctv/detective-chicken/internal/store"
 )
 
 func testAPI() (*API, *store.Memory) {

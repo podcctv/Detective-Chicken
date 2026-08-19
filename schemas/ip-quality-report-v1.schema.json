@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:jijian:ip-quality-report:v1",
-  "title": "JiJian IP Quality Report",
+  "$id": "urn:detective-chicken:ip-quality-report:v1",
+  "title": "Detective Chicken IP Quality Report",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "report_id", "agent_id", "node_id", "collected_at", "collector", "network", "quality"],

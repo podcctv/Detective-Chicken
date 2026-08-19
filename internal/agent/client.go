@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/podcctv/jijian/internal/model"
+	"github.com/podcctv/detective-chicken/internal/model"
 )
 
 const Version = "0.1.0"
