@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Detective Chicken API
-  version: 0.1.0
+  version: 0.2.0
   description: Detective Chicken control-plane and signed Agent ingest API for continuous VPS IP identity, risk and unlock monitoring.
 servers:
   - url: /api/v1
@@ -14,11 +14,13 @@ paths:
   /dashboard:
     get:
       operationId: getDashboard
+      security: [{ sessionCookie: [] }]
       responses:
         "200": { description: Fleet dashboard snapshot }
   /nodes:
     get:
       operationId: listNodes
+      security: [{ sessionCookie: [] }]
       responses:
         "200": { description: Tenant node list }
   /nodes/{id}:
@@ -26,6 +28,8 @@ paths:
       operationId: getNode
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: full_ip, in: query, required: false, schema: { type: boolean, default: false }, description: Available only to the node owner or an administrator. }
+      security: [{ sessionCookie: [] }]
       responses:
         "200": { description: Node detail }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -34,6 +38,7 @@ paths:
       operationId: getNodeSeries
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+      security: [{ sessionCookie: [] }]
       responses:
         "200": { description: Risk time series }
   /nodes/{id}/scan:
@@ -41,6 +46,7 @@ paths:
       operationId: createScan
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+      security: [{ sessionCookie: [] }]
       responses:
         "202": { description: Scan command queued }
   /enrollment-tokens:
@@ -57,8 +63,94 @@ paths:
                 name: { type: string }
                 provider: { type: string }
                 region: { type: string }
+                os_family: { type: string, enum: [auto, debian, alpine, rhel, arch] }
+                platform: { type: string, enum: [auto, pve, baremetal, lxc, docker, podman, incus] }
+                arch: { type: string, enum: [auto, amd64, arm64, armv7] }
       responses:
         "201": { description: One-time enrollment token }
+      security: [{ sessionCookie: [] }]
+  /auth/status:
+    get:
+      operationId: getAuthStatus
+      responses:
+        "200": { description: Bootstrap, registration and current-session status }
+  /auth/register:
+    post:
+      operationId: registerUser
+      responses:
+        "201": { description: User created and session started }
+        "403": { description: Registration is closed }
+  /auth/login:
+    post:
+      operationId: login
+      responses:
+        "200": { description: Session started }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /auth/logout:
+    post:
+      operationId: logout
+      security: [{ sessionCookie: [] }]
+      responses:
+        "204": { description: Session ended }
+  /auth/password:
+    post:
+      operationId: changePassword
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Password changed and existing sessions revoked }
+  /auth/password-reset/complete:
+    post:
+      operationId: completePasswordReset
+      responses:
+        "200": { description: Password reset completed }
+  /admin/users:
+    get:
+      operationId: listUsers
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: User list; administrator only }
+  /admin/users/{id}:
+    patch:
+      operationId: updateUserRole
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: User role updated }
+  /admin/users/{id}/password-reset:
+    post:
+      operationId: createPasswordReset
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      security: [{ sessionCookie: [] }]
+      responses:
+        "201": { description: One-use reset token created }
+  /admin/settings:
+    get:
+      operationId: getSettings
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Registration settings }
+    patch:
+      operationId: updateSettings
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Registration settings updated }
+  /install/{file}:
+    get:
+      operationId: downloadInstaller
+      parameters:
+        - { name: file, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Generated POSIX shell installer }
+        "404": { description: Enrollment token expired or used }
+  /downloads/agent/{arch}:
+    get:
+      operationId: downloadAgent
+      parameters:
+        - { name: arch, in: path, required: true, schema: { type: string, enum: [amd64, arm64, armv7] } }
+      responses:
+        "200": { description: Linux Agent binary }
   /agents/register:
     post:
       operationId: registerAgent
@@ -88,6 +180,7 @@ paths:
         "200": { description: Pending commands }
 components:
   securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: dc_session }
     enrollmentToken: { type: http, scheme: bearer }
     messageSignature:
       type: apiKey

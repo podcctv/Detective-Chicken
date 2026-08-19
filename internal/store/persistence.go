@@ -1,0 +1,104 @@
+package store
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/podcctv/detective-chicken/internal/model"
+)
+
+type diskState struct {
+	Version             int                           `json:"version"`
+	Nodes               map[string]model.Node         `json:"nodes"`
+	Series              map[string][]model.TrendPoint `json:"series"`
+	Alerts              []model.Alert                 `json:"alerts"`
+	Agents              map[string]AgentKey           `json:"agents"`
+	Enrollments         map[string]Enrollment         `json:"enrollments"`
+	Reports             map[string]model.Report       `json:"reports"`
+	Commands            map[string][]Command          `json:"commands"`
+	Users               map[string]UserAccount        `json:"users"`
+	Sessions            map[string]Session            `json:"sessions"`
+	PasswordResets      map[string]PasswordReset      `json:"password_resets"`
+	RegistrationEnabled bool                          `json:"registration_enabled"`
+}
+
+func NewPersistent(path string, seed bool) (*Memory, error) {
+	if path == "" {
+		return NewMemory(seed), nil
+	}
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		m := NewMemory(seed)
+		m.dataPath = path
+		if err := m.persist(); err != nil {
+			return nil, err
+		}
+		return m, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var state diskState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return nil, fmt.Errorf("decode data file: %w", err)
+	}
+	m := NewMemory(false)
+	m.dataPath = path
+	m.nodes = nonNil(state.Nodes)
+	m.series = nonNil(state.Series)
+	m.alerts = state.Alerts
+	m.agents = nonNil(state.Agents)
+	m.enrollments = nonNil(state.Enrollments)
+	m.reports = nonNil(state.Reports)
+	m.commands = nonNil(state.Commands)
+	m.users = nonNil(state.Users)
+	m.sessions = nonNil(state.Sessions)
+	m.passwordResets = nonNil(state.PasswordResets)
+	m.registrationEnabled = state.RegistrationEnabled
+	m.usernames = make(map[string]string, len(m.users))
+	for id, account := range m.users {
+		m.usernames[normalizeUsername(account.User.Username)] = id
+	}
+	return m, nil
+}
+
+func nonNil[K comparable, V any](value map[K]V) map[K]V {
+	if value == nil {
+		return make(map[K]V)
+	}
+	return value
+}
+
+func (m *Memory) persist() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.writeStateLocked()
+}
+
+func (m *Memory) persistLocked() {
+	if err := m.writeStateLocked(); err != nil {
+		fmt.Fprintf(os.Stderr, "detective-chicken: persist state: %v\n", err)
+	}
+}
+
+func (m *Memory) writeStateLocked() error {
+	if m.dataPath == "" {
+		return nil
+	}
+	state := diskState{Version: 1, Nodes: m.nodes, Series: m.series, Alerts: m.alerts, Agents: m.agents, Enrollments: m.enrollments, Reports: m.reports, Commands: m.commands, Users: m.users, Sessions: m.sessions, PasswordResets: m.passwordResets, RegistrationEnabled: m.registrationEnabled}
+	raw, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(m.dataPath), 0700); err != nil {
+		return err
+	}
+	tmp := m.dataPath + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, m.dataPath)
+}

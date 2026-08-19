@@ -32,19 +32,37 @@ func (a *API) Handler() http.Handler { return a.handler }
 
 func (a *API) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"status": "ok", "time": time.Now().UTC(), "version": "0.1.0"})
+		writeJSON(w, 200, map[string]any{"status": "ok", "time": time.Now().UTC(), "version": "0.2.0"})
 	})
-	mux.HandleFunc("GET /api/v1/dashboard", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, a.store.Dashboard()) })
-	mux.HandleFunc("GET /api/v1/nodes", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"items": a.store.Nodes()})
-	})
-	mux.HandleFunc("GET /api/v1/nodes/{id}", a.node)
-	mux.HandleFunc("GET /api/v1/nodes/{id}/series", a.series)
-	mux.HandleFunc("GET /api/v1/alerts", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"items": a.store.Alerts()})
-	})
-	mux.HandleFunc("POST /api/v1/nodes/{id}/scan", a.scan)
-	mux.HandleFunc("POST /api/v1/enrollment-tokens", a.enrollment)
+	mux.HandleFunc("GET /api/v1/auth/status", a.authStatus)
+	mux.HandleFunc("POST /api/v1/auth/register", a.registerUser)
+	mux.HandleFunc("POST /api/v1/auth/login", a.login)
+	mux.HandleFunc("POST /api/v1/auth/logout", a.authenticated(a.logout))
+	mux.HandleFunc("POST /api/v1/auth/password", a.authenticated(a.changePassword))
+	mux.HandleFunc("POST /api/v1/auth/password-reset/complete", a.completePasswordReset)
+	mux.HandleFunc("GET /api/v1/install/{file}", a.installScript)
+	mux.HandleFunc("GET /api/v1/downloads/agent/{arch}", a.agentDownload)
+	mux.HandleFunc("GET /api/v1/admin/users", a.adminOnly(a.users))
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", a.adminOnly(a.updateUser))
+	mux.HandleFunc("POST /api/v1/admin/users/{id}/password-reset", a.adminOnly(a.createPasswordReset))
+	mux.HandleFunc("GET /api/v1/admin/settings", a.adminOnly(a.settings))
+	mux.HandleFunc("PATCH /api/v1/admin/settings", a.adminOnly(a.updateSettings))
+	mux.HandleFunc("GET /api/v1/dashboard", a.authenticated(func(w http.ResponseWriter, r *http.Request) {
+		p := requestPrincipal(r)
+		writeJSON(w, 200, a.store.DashboardFor(p.User.ID, p.User.Role == "admin"))
+	}))
+	mux.HandleFunc("GET /api/v1/nodes", a.authenticated(func(w http.ResponseWriter, r *http.Request) {
+		p := requestPrincipal(r)
+		writeJSON(w, 200, map[string]any{"items": a.store.NodesFor(p.User.ID, p.User.Role == "admin")})
+	}))
+	mux.HandleFunc("GET /api/v1/nodes/{id}", a.authenticated(a.node))
+	mux.HandleFunc("GET /api/v1/nodes/{id}/series", a.authenticated(a.series))
+	mux.HandleFunc("GET /api/v1/alerts", a.authenticated(func(w http.ResponseWriter, r *http.Request) {
+		p := requestPrincipal(r)
+		writeJSON(w, 200, map[string]any{"items": a.store.DashboardFor(p.User.ID, p.User.Role == "admin").Alerts})
+	}))
+	mux.HandleFunc("POST /api/v1/nodes/{id}/scan", a.authenticated(a.scan))
+	mux.HandleFunc("POST /api/v1/enrollment-tokens", a.authenticated(a.enrollment))
 	mux.HandleFunc("POST /api/v1/agents/register", a.register)
 	mux.HandleFunc("POST /api/v1/heartbeats", a.signed(a.heartbeat))
 	mux.HandleFunc("POST /api/v1/reports", a.signed(a.report))
@@ -53,9 +71,8 @@ func (a *API) routes(mux *http.ServeMux) {
 
 func (a *API) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Digest, Signature-Input, Signature")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if r.Method == http.MethodOptions {
@@ -69,7 +86,8 @@ func (a *API) middleware(next http.Handler) http.Handler {
 }
 
 func (a *API) node(w http.ResponseWriter, r *http.Request) {
-	n, err := a.store.Node(r.PathValue("id"))
+	p := requestPrincipal(r)
+	n, err := a.store.NodeDetailFor(r.PathValue("id"), p.User.ID, p.User.Role == "admin", r.URL.Query().Get("full_ip") == "true")
 	if err != nil {
 		apiError(w, 404, "NODE_NOT_FOUND", "node not found")
 		return
@@ -77,6 +95,11 @@ func (a *API) node(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, n)
 }
 func (a *API) series(w http.ResponseWriter, r *http.Request) {
+	p := requestPrincipal(r)
+	if !a.store.CanAccessNode(r.PathValue("id"), p.User.ID, p.User.Role == "admin") {
+		apiError(w, 404, "NODE_NOT_FOUND", "node not found")
+		return
+	}
 	s, err := a.store.Series(r.PathValue("id"))
 	if err != nil {
 		apiError(w, 404, "NODE_NOT_FOUND", "node not found")
@@ -85,6 +108,11 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"node_id": r.PathValue("id"), "metric": "risk_score", "step": "12h", "series": s})
 }
 func (a *API) scan(w http.ResponseWriter, r *http.Request) {
+	p := requestPrincipal(r)
+	if !a.store.CanAccessNode(r.PathValue("id"), p.User.ID, p.User.Role == "admin") {
+		apiError(w, 404, "NODE_NOT_FOUND", "node not found")
+		return
+	}
 	c, err := a.store.CreateScan(r.PathValue("id"))
 	if err != nil {
 		apiError(w, 404, "NODE_NOT_FOUND", "node not found")
@@ -94,13 +122,20 @@ func (a *API) scan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) enrollment(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Name, Provider, Region string }
+	principal := requestPrincipal(r)
+	var in struct {
+		Name, Provider, Region string
+		OSFamily               string `json:"os_family"`
+		Platform               string `json:"platform"`
+		Arch                   string `json:"arch"`
+	}
 	if err := decode(r, &in, 32<<10); err != nil || strings.TrimSpace(in.Name) == "" {
 		apiError(w, 400, "INVALID_PAYLOAD", "name is required")
 		return
 	}
-	e := a.store.CreateEnrollment("tenant_demo", in.Name, in.Provider, in.Region)
-	writeJSON(w, 201, map[string]any{"token": e.Token, "expires_at": e.ExpiresAt, "max_uses": 1})
+	e := a.store.CreateEnrollment(principal.TenantID, principal.User.ID, in.Name, in.Provider, in.Region, in.OSFamily, in.Platform, in.Arch)
+	installURL := publicBaseURL(r) + "/api/v1/install/" + e.Token + ".sh"
+	writeJSON(w, 201, map[string]any{"token": e.Token, "expires_at": e.ExpiresAt, "max_uses": 1, "install_url": installURL, "install_command": "curl -fsSL '" + installURL + "' | sudo sh"})
 }
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")

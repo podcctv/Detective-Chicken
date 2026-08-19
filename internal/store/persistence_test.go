@@ -1,0 +1,51 @@
+package store
+
+import (
+	"path/filepath"
+	"testing"
+)
+
+func TestPersistentAccountsAndSessions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	first, err := NewPersistent(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := first.RegisterUser("admin", "Administrator", "admin-password-123")
+	if err != nil || admin.Role != "admin" {
+		t.Fatalf("create first admin: %#v %v", admin, err)
+	}
+	first.SetRegistrationEnabled(true)
+	member, err := first.RegisterUser("member", "Member", "member-password-123")
+	if err != nil || member.Role != "user" {
+		t.Fatalf("create member: %#v %v", member, err)
+	}
+	_, token, _, err := first.CreateSession("member", "member-password-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := NewPersistent(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, tenantID, err := reloaded.UserBySession(token)
+	if err != nil || user.ID != member.ID || tenantID != "tenant_default" {
+		t.Fatalf("session did not survive reload: %#v %q %v", user, tenantID, err)
+	}
+	if !reloaded.PublicSettings().RegistrationEnabled || len(reloaded.Users()) != 2 {
+		t.Fatalf("settings or users did not survive reload: %#v", reloaded.PublicSettings())
+	}
+}
+
+func TestMaskIPLastTwoSegments(t *testing.T) {
+	cases := map[string]string{
+		"203.0.113.99":       "203.0.*.*",
+		"2a01:4f8:c2c:17::1": "2a01:4f8:c2c:17:0:0:*:*",
+	}
+	for input, want := range cases {
+		if got := MaskIP(input); got != want {
+			t.Errorf("MaskIP(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

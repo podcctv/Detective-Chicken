@@ -4,6 +4,10 @@ services:
     restart: unless-stopped
     environment:
       DETECTIVE_CHICKEN_ADDR: ":8080"
+      DETECTIVE_CHICKEN_DATA_FILE: "/data/state.json"
+      DETECTIVE_CHICKEN_AGENT_DIR: "/usr/local/share/detective-chicken"
+    volumes:
+      - detective_data:/data
     expose:
       - "8080"
     healthcheck:
@@ -39,3 +43,4 @@ services:
 
 volumes:
   postgres_data:
+  detective_data:

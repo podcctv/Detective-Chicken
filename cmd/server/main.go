@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/podcctv/detective-chicken/internal/server"
@@ -27,9 +28,16 @@ func main() {
 		addr = ":8080"
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	api := server.New(store.NewMemory(true), logger)
+	dataFile := os.Getenv("DETECTIVE_CHICKEN_DATA_FILE")
+	seedDemo := strings.EqualFold(os.Getenv("DETECTIVE_CHICKEN_SEED_DEMO"), "true")
+	st, err := store.NewPersistent(dataFile, seedDemo)
+	if err != nil {
+		logger.Error("unable to open data store", "error", err)
+		os.Exit(1)
+	}
+	api := server.New(st, logger)
 	logger.Info("Detective Chicken API listening", "addr", addr)
-	if err := http.ListenAndServe(addr, api.Handler()); err != nil {
+	if err = http.ListenAndServe(addr, api.Handler()); err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}

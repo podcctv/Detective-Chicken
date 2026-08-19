@@ -14,6 +14,8 @@ IP.Check.Place -4/-6 -j -p
 
 ## Identity boundary
 
+- The first registered user becomes the initial administrator and public registration closes immediately.
+- Administrators control registration, roles and one-use password reset links. Non-admin users can only access nodes they enrolled.
 - A node is the business asset.
 - An agent is one installation of the collector.
 - The agent generates its Ed25519 key pair locally.
@@ -23,13 +25,15 @@ IP.Check.Place -4/-6 -j -p
 
 ## Storage path
 
-The current MVP uses an in-process store with deterministic demo data so the complete product can be evaluated without infrastructure. `migrations/001_init.sql` is the production data contract for PostgreSQL 18 and TimescaleDB. The storage interface is intentionally kept behind the API package so a PostgreSQL repository can replace it without changing the Agent or frontend contracts.
+The single-instance runtime persists users, hashed passwords, hashed sessions/reset tokens, nodes, Agent keys, reports and settings in an atomic JSON snapshot. Docker mounts it at `/data/state.json`; the file is created with mode `0600`. Demo data is opt-in through `DETECTIVE_CHICKEN_SEED_DEMO=true`.
+
+`migrations/001_init.sql` and `migrations/002_accounts.sql` are the scale-out contract for PostgreSQL 18 and TimescaleDB. The storage boundary stays behind the API package so PostgreSQL can replace the JSON repository without changing Agent or frontend contracts.
 
 Raw upstream JSON is retained on canonical reports. This allows a newer parser to rebuild normalized samples after an upstream schema change without executing a new third-party scan.
 
 ## Scale path
 
-1. Replace the MVP store with PostgreSQL/TimescaleDB and apply tenant-scoped authorization.
+1. Replace the single-instance JSON snapshot with PostgreSQL/TimescaleDB while preserving tenant and owner authorization.
 2. Move raw reports to S3-compatible object storage.
 3. Add Redis for distributed nonce and rate-limit state.
 4. Insert NATS JetStream after ingest when synchronous writes become a bottleneck.

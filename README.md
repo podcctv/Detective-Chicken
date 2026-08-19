@@ -11,11 +11,15 @@
 ## 当前可用能力
 
 - 舰队总览：总节点、在线、异常、高风险、IP 变更、解锁下降和 DNSBL 新增。
-- 节点资产：IP 默认脱敏，支持风险、ASN、地区、媒体解锁、黑名单和心跳状态。
+- 账户权限：首个注册账户自动成为管理员；管理员控制后续注册、用户角色和一次性密码重置链接。
+- 节点资产：按创建者隔离，IPv4/IPv6 默认隐藏最后两段；节点所有者和管理员可按需查看完整 IP。
+- 节点详情：质量评分、风险因子、解锁矩阵、趋势、告警、网络身份和最近采集器信息。
+- 质量首页：小鸡质量排行榜、Netflix/ChatGPT 解锁矩阵、风险趋势和变化型告警。
 - 变化追踪：风险分趋势、IP/ASN/解锁能力变化和变化型告警。
 - Agent 身份：一次性注册凭证，本机生成 Ed25519 私钥，请求摘要、时间戳、nonce 和重放拦截。
 - IPQuality 适配器：IPv4/IPv6 分开执行，默认 `-j -p`，宽松解析并保留原始 JSON。
-- 运维安装：心跳与完整扫描拆分的 systemd service/timer，扫描带随机抖动。
+- 兼容安装：按 Debian/Alpine/RHEL/Arch、AMD64/ARM64/ARMv7 和 PVE/独服/LXC/Docker/Podman/Incus 生成脚本，自动选择 systemd、OpenRC/cron 或容器循环。
+- 持久化：默认将账户、会话、节点、Agent、报告与设置保存到权限受限的 JSON 快照；PostgreSQL/TimescaleDB 契约保留为规模化升级路径。
 - 数据契约：OpenAPI 3.1、JSON Schema 2020-12、PostgreSQL/TimescaleDB 初始化脚本。
 
 ## 本地运行
@@ -34,7 +38,9 @@ npm ci
 npm run dev
 ```
 
-打开 `http://localhost:4173`。Vite 会把 `/api` 代理到 `http://127.0.0.1:8080`；API 不可用时，前端会明确显示并使用演示数据。
+打开 `http://localhost:4173`。Vite 会把 `/api` 代理到 `http://127.0.0.1:8080`；API 不可用时，前端会明确显示连接错误，不会用演示数据冒充实时状态。
+
+首次打开控制台时创建的第一个账户会自动成为管理员，随后注册默认关闭。需要展示内置演示节点时，可在启动 API 前设置 `DETECTIVE_CHICKEN_SEED_DEMO=true`；默认不注入演示数据。
 
 ## Docker Compose
 
@@ -48,7 +54,7 @@ docker compose up --build
 docker compose --profile production-data up --build
 ```
 
-当前 `v0.1.0` 为可运行 MVP，API 使用进程内演示存储；生产上线前应按 [架构说明](docs/architecture.md) 接入 PostgreSQL repository、用户认证和分布式 nonce cache。数据库迁移已经固定核心表、hypertable、RLS 与 retention 基线。
+Compose 默认使用 `detective_data` 卷保存 `/data/state.json`。备份该文件即可迁移单实例数据；规模化部署应按 [架构说明](docs/architecture.md) 切换到 PostgreSQL repository 和分布式 nonce/session cache。数据库迁移已经固定账户、核心采样表、hypertable、RLS 与 retention 基线。
 
 ### OVH + Caddy
 
