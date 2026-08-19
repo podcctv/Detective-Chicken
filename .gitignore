@@ -1,0 +1,11 @@
+.idea/
+.vscode/
+*.exe
+*.log
+.env
+.DS_Store
+data/
+web/node_modules/
+web/dist/
+coverage.out
+*.tsbuildinfo

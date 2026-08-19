@@ -1,0 +1,41 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      JIJIAN_ADDR: ":8080"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/jijian-server", "-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8088:80"
+
+  postgres:
+    image: timescale/timescaledb:2.29.0-pg18
+    profiles: ["production-data"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jijian}
+      POSTGRES_USER: ${POSTGRES_USER:-jijian}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-before-production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jijian} -d ${POSTGRES_DB:-jijian}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

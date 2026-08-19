@@ -1,0 +1,11 @@
+[Unit]
+Description=JiJian VPS IP quality scan
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/jijian-agent --family 4 scan
+User=root
+Nice=10
+IOSchedulingClass=idle

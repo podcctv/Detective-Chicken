@@ -1,0 +1,9 @@
+[Unit]
+Description=JiJian agent heartbeat
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/jijian-agent heartbeat
+User=root

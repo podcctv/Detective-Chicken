@@ -1,0 +1,99 @@
+openapi: 3.1.0
+info:
+  title: JiJian API
+  version: 0.1.0
+  description: VPS IP quality monitoring control-plane and signed agent ingest API.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        "200": { description: Healthy }
+  /dashboard:
+    get:
+      operationId: getDashboard
+      responses:
+        "200": { description: Fleet dashboard snapshot }
+  /nodes:
+    get:
+      operationId: listNodes
+      responses:
+        "200": { description: Tenant node list }
+  /nodes/{id}:
+    get:
+      operationId: getNode
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Node detail }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /nodes/{id}/series:
+    get:
+      operationId: getNodeSeries
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Risk time series }
+  /nodes/{id}/scan:
+    post:
+      operationId: createScan
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scan command queued }
+  /enrollment-tokens:
+    post:
+      operationId: createEnrollmentToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                provider: { type: string }
+                region: { type: string }
+      responses:
+        "201": { description: One-time enrollment token }
+  /agents/register:
+    post:
+      operationId: registerAgent
+      security: [{ enrollmentToken: [] }]
+      responses:
+        "201": { description: Agent registered }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /heartbeats:
+    post:
+      operationId: submitHeartbeat
+      security: [{ messageSignature: [] }]
+      responses:
+        "202": { description: Heartbeat accepted }
+        "409": { description: Replay detected }
+  /reports:
+    post:
+      operationId: submitReport
+      security: [{ messageSignature: [] }]
+      responses:
+        "202": { description: Report accepted }
+        "409": { description: Duplicate report or replay }
+  /agents/commands:
+    get:
+      operationId: pollCommands
+      security: [{ messageSignature: [] }]
+      responses:
+        "200": { description: Pending commands }
+components:
+  securitySchemes:
+    enrollmentToken: { type: http, scheme: bearer }
+    messageSignature:
+      type: apiKey
+      in: header
+      name: Signature
+      description: Ed25519 request signature bound to method, path, digest, created, nonce and keyid.
+  responses:
+    NotFound: { description: Resource not found }
+    Unauthorized: { description: Authentication failed }
