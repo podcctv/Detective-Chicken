@@ -44,11 +44,16 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// 1. Run Go Native Prober concurrently
-	nativeChan := make(chan map[string]prober.ProbeResult, 1)
+	type nativePack struct {
+		results  map[string]prober.ProbeResult
+		identity prober.NetworkIdentity
+	}
+	nativeChan := make(chan nativePack, 1)
 	go func() {
 		p := prober.NewProber(family, 6*time.Second)
-		nativeChan <- p.RunAll(ctx)
+		ident := p.ProbeNetworkIdentity(ctx)
+		res := p.RunAll(ctx)
+		nativeChan <- nativePack{results: res, identity: ident}
 	}()
 
 	// 2. Run Upstream Script for ASN, Geo, Risk scores, etc.
@@ -62,7 +67,9 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 
-	nativeResults := <-nativeChan
+	pack := <-nativeChan
+	nativeResults := pack.results
+	identity := pack.identity
 
 	report, collectErr := finishCollection(stdout.Bytes(), stderr.String(), err, family)
 	if collectErr != nil && len(nativeResults) > 0 {
@@ -75,20 +82,38 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 				Name:           "native-prober",
 				AdapterVersion: Version,
 			},
-			Network: model.Network{Family: family},
-			Quality: model.Quality{},
+			Network: model.Network{
+				Family:     family,
+				ReportedIP: identity.IP,
+			},
+			Quality: model.Quality{
+				CountryCode: identity.CountryCode,
+			},
 		}
 	} else if collectErr != nil {
 		return model.Report{}, collectErr
 	}
 
+	// If upstream failed to find reported IP, use native prober detected IP
+	if report.Network.ReportedIP == "" && identity.IP != "" {
+		report.Network.ReportedIP = identity.IP
+	}
+	if report.Quality.CountryCode == "" && identity.CountryCode != "" {
+		report.Quality.CountryCode = identity.CountryCode
+	}
+	if identity.IsWARP {
+		if report.Quality.Factors == nil {
+			report.Quality.Factors = make(map[string]any)
+		}
+		report.Quality.Factors["WARP"] = true
+		report.Quality.UsageType = "WARP"
+	}
 
 	// Merge Native Prober results into report.Quality.Media
 	if report.Quality.Media == nil {
 		report.Quality.Media = make(map[string]any)
 	}
 	for id, res := range nativeResults {
-		// If upstream already reported a status (e.g. Netflix, Disney, Youtube), prefer native result for latency/status if available, or keep
 		report.Quality.Media[id] = map[string]any{
 			"ID":         res.ID,
 			"Name":       res.Name,

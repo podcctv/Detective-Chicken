@@ -25,6 +25,13 @@ type ProbeResult struct {
 	Detail   string
 }
 
+type NetworkIdentity struct {
+	IP          string
+	IsWARP      bool
+	CountryCode string
+	Colo        string
+}
+
 // Prober performs native concurrent probes on target media and AI endpoints.
 type Prober struct {
 	Family  int // 4 or 6
@@ -36,6 +43,58 @@ func NewProber(family int, timeout time.Duration) *Prober {
 		timeout = 4 * time.Second
 	}
 	return &Prober{Family: family, Timeout: timeout}
+}
+
+func (p *Prober) ProbeNetworkIdentity(ctx context.Context) NetworkIdentity {
+	client := p.getHTTPClient()
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.cloudflare.com/cdn-cgi/trace", nil)
+	if err != nil {
+		return NetworkIdentity{}
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	resp, err := client.Do(req)
+	if err != nil {
+		// Fallback to ipify endpoint
+		apiURL := "https://api.ipify.org"
+		if p.Family == 6 {
+			apiURL = "https://api6.ipify.org"
+		}
+		req2, err2 := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+		if err2 == nil {
+			req2.Header.Set("User-Agent", "Mozilla/5.0")
+			if resp2, err3 := client.Do(req2); err3 == nil {
+				defer resp2.Body.Close()
+				body, _ := io.ReadAll(io.LimitReader(resp2.Body, 128))
+				return NetworkIdentity{IP: strings.TrimSpace(string(body))}
+			}
+		}
+		return NetworkIdentity{}
+	}
+	defer resp.Body.Close()
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	lines := strings.Split(string(bodyBytes), "\n")
+	var ident NetworkIdentity
+	for _, line := range lines {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+		switch k {
+		case "ip":
+			ident.IP = v
+		case "warp":
+			if v == "on" || v == "plus" {
+				ident.IsWARP = true
+			}
+		case "loc":
+			ident.CountryCode = v
+		case "colo":
+			ident.Colo = v
+		}
+	}
+	return ident
 }
 
 func (p *Prober) getHTTPClient() *http.Client {

@@ -96,6 +96,29 @@ const countryFlagEmoji = computed(() => {
   const offset = 127397
   return String.fromCodePoint(...[...code.toUpperCase()].map((c) => c.charCodeAt(0) + offset))
 })
+
+// Combined [HK-机房] / [HK-家宽] / [TW-商宽] badge
+const locationUsageBadge = computed(() => {
+  const loc = props.node.country_code || props.node.region || 'GL'
+  const usage = props.node.usage_type || '机房'
+  return `${loc}-${usage}`
+})
+
+// Protocol & WARP display badge (e.g. [IPv4(WARP) + IPv6])
+const ipProtocolBadge = computed(() => {
+  const fams = props.node.families?.length ? props.node.families : [props.node.family || 4]
+  const has4 = fams.includes(4)
+  const has6 = fams.includes(6)
+
+  if (has4 && has6) {
+    const v4Str = (props.node.warp4 || (props.node.is_warp && !props.node.warp6)) ? 'IPv4(WARP)' : 'IPv4'
+    const v6Str = props.node.warp6 ? 'IPv6(WARP)' : 'IPv6'
+    return `${v4Str} + ${v6Str}`
+  } else if (has6) {
+    return (props.node.warp6 || props.node.is_warp) ? 'IPv6(WARP)' : 'IPv6'
+  }
+  return (props.node.warp4 || props.node.is_warp) ? 'IPv4(WARP)' : 'IPv4'
+})
 </script>
 
 <template>
@@ -127,10 +150,10 @@ const countryFlagEmoji = computed(() => {
       </div>
       <div class="card-border-glow"></div>
 
-      <!-- Top Header Row: Country Badge + Provider + Region in ONE line, Risk Medal on Right -->
+      <!-- Top Header Row: [HK-机房] Badge + Provider + Region in ONE line, Risk Medal on Right -->
       <div class="card-header">
         <div class="card-issuer-row">
-          <span class="region-flag-pill">{{ node.country_code || node.region || 'GL' }}</span>
+          <span class="region-flag-pill">{{ locationUsageBadge }}</span>
           <strong class="issuer-title">{{ node.provider || 'VPS 节点资产' }}</strong>
           <span v-if="node.region && node.region !== node.country_code" class="issuer-region-text">{{ node.region }}</span>
         </div>
@@ -148,9 +171,19 @@ const countryFlagEmoji = computed(() => {
       <div class="card-identity-block">
         <div class="node-embossed-name">{{ node.name }}</div>
         <div class="node-embossed-ip">
-          <span class="ip-digits">{{ node.masked_ip || '0.0.0.0' }}</span>
-          <span class="ip-family-badge">
-            {{ (node.families?.length ? node.families : [node.family || 4]).map((f) => `IPv${f}`).join(' + ') }}
+          <div class="ip-numbers-wrap">
+            <span v-if="node.masked_ipv4 && node.masked_ipv6" class="ip-digits dual-ip">
+              <span class="ip-v4">{{ node.masked_ipv4 }}</span>
+              <span class="ip-sep">·</span>
+              <span class="ip-v6">{{ node.masked_ipv6 }}</span>
+            </span>
+            <span v-else class="ip-digits">{{ node.masked_ip || '0.0.0.0' }}</span>
+          </div>
+          <span class="ip-family-badge" :class="{ 'is-warp': node.is_warp }">
+            {{ ipProtocolBadge }}
+          </span>
+          <span class="ip-type-badge" :class="node.ip_type === '广播' ? 'type-broadcast' : 'type-native'">
+            {{ node.ip_type || '原生' }}
           </span>
         </div>
       </div>
@@ -174,11 +207,11 @@ const countryFlagEmoji = computed(() => {
         </div>
       </div>
 
-      <!-- Card Footer: Metallic Unlock Badges Cluster -->
+      <!-- Card Footer: Frameless Clean Floating Unlock Badges -->
       <div class="card-unlocks-footer">
         <div class="unlocks-title-row">
           <span>REAL-TIME STREAMING & AI UNLOCKS</span>
-          <span class="action-hint">点击卡片展开详情 <ArrowUpRight :size="12" /></span>
+          <span class="action-hint">点击卡片 3D 展开报告 <ArrowUpRight :size="12" /></span>
         </div>
         <div class="badges-scroll-row">
           <MetalBadge
@@ -417,23 +450,58 @@ const countryFlagEmoji = computed(() => {
   align-items: center;
   gap: 8px;
   margin-top: 4px;
+  flex-wrap: wrap;
+}
+.ip-numbers-wrap {
+  display: flex;
+  align-items: center;
 }
 .ip-digits {
   font-family: 'Fira Code', monospace;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   color: #e2e8f0;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   text-shadow: 0 1px 2px #000;
 }
+.ip-digits.dual-ip {
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.ip-sep {
+  color: #64748b;
+  margin: 0 4px;
+}
 .ip-family-badge {
-  font-size: 9px;
+  font-family: 'Fira Code', monospace;
+  font-size: 9.5px;
   font-weight: 700;
   background: rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
-  padding: 1px 5px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.ip-family-badge.is-warp {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.ip-type-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.type-native {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.type-broadcast {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
 /* Network Row */
@@ -490,7 +558,7 @@ const countryFlagEmoji = computed(() => {
   box-shadow: 0 0 6px currentColor;
 }
 
-/* Unlocks Footer */
+/* Unlocks Footer: Frameless Clean Floating Brand Logos */
 .card-unlocks-footer {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 10px;
@@ -520,8 +588,48 @@ const countryFlagEmoji = computed(() => {
 .badges-scroll-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   flex-wrap: wrap;
   overflow: hidden;
+  padding: 4px 2px;
+}
+
+.badges-scroll-row :deep(.metal-badge) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.badges-scroll-row :deep(.brand-logo-wrap) {
+  background: transparent !important;
+  border: none !important;
+  width: 24px !important;
+  height: 24px !important;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6));
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+}
+
+.badges-scroll-row :deep(.brand-logo-wrap:hover) {
+  transform: translateY(-3px) scale(1.2);
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.7));
+}
+
+.badges-scroll-row :deep(.status-available .brand-logo-wrap) {
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.45));
+}
+
+.badges-scroll-row :deep(.status-limited .brand-logo-wrap) {
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.45));
+}
+
+.badges-scroll-row :deep(.status-blocked .brand-logo-wrap) {
+  filter: grayscale(100%) opacity(0.35);
+}
+
+.badges-scroll-row :deep(.status-gem) {
+  display: none !important;
 }
 </style>

@@ -58,6 +58,13 @@ export interface Node {
   asn: number
   organization: string
   country_code: string
+  usage_type?: string
+  ip_type?: string
+  is_warp?: boolean
+  warp4?: boolean
+  warp6?: boolean
+  masked_ipv4?: string
+  masked_ipv6?: string
   latitude?: number
   longitude?: number
   risk: number

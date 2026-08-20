@@ -50,6 +50,13 @@ type Node struct {
 	ASN                 int64       `json:"asn"`
 	Organization        string      `json:"organization"`
 	CountryCode         string      `json:"country_code"`
+	UsageType           string      `json:"usage_type,omitempty"` // "datacenter" | "residential" | "business" | "机房" | "家宽" | "商宽"
+	IPType              string      `json:"ip_type,omitempty"`    // "native" | "broadcast" | "原生" | "广播"
+	IsWarp              bool        `json:"is_warp,omitempty"`
+	Warp4               bool        `json:"warp4,omitempty"`
+	Warp6               bool        `json:"warp6,omitempty"`
+	MaskedIPv4          string      `json:"masked_ipv4,omitempty"`
+	MaskedIPv6          string      `json:"masked_ipv6,omitempty"`
 	Latitude            float64     `json:"latitude,omitempty"`
 	Longitude           float64     `json:"longitude,omitempty"`
 	Risk                int         `json:"risk"`

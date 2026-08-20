@@ -139,67 +139,10 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
     </header>
 
     <main class="public-main">
-      <!-- Luxury Titanium Hero Command Bar -->
-      <section class="hero-command-deck">
-        <div class="hero-intro">
-          <div class="hero-badge">
-            <ShieldCheck :size="14" />
-            <span>ENTERPRISE GRADE IP QUALITY & 20+ SERVICES DISCOVERY</span>
-          </div>
-          <h1 class="hero-title">全球 VPS 质量、IP 纯净度与 20+ 服务解锁全景矩阵</h1>
-          <p class="hero-desc">
-            100% 真实网络探测，直观洞悉脱敏后全球节点的 IP 纯净度评分（Scamalytics/AbuseIPDB/IPQS）与 20+ 款主流流媒体（Netflix/Disney+/YouTube/Prime）及 AI 模型（ChatGPT/Claude/Gemini/DeepSeek）的真实解锁状态与网络延迟。
-          </p>
-        </div>
-
-        <!-- 4 Luxury Titanium Metric Gauges -->
-        <div class="hero-gauges-grid">
-          <div class="metal-gauge-card">
-            <div class="gauge-metal-layer"></div>
-            <div class="gauge-icon fleet"><Server :size="20" /></div>
-            <div class="gauge-meta">
-              <span class="gauge-label">全网公开资产</span>
-              <strong class="gauge-value">{{ data.stats.total ?? data.nodes.length }} <small>NODES</small></strong>
-              <span class="gauge-sub">{{ data.stats.online ?? data.nodes.length }} 台实时在线</span>
-            </div>
-          </div>
-
-          <div class="metal-gauge-card">
-            <div class="gauge-metal-layer"></div>
-            <div class="gauge-icon ai"><Bot :size="20" /></div>
-            <div class="gauge-meta">
-              <span class="gauge-label">AI 模型全域解锁率</span>
-              <strong class="gauge-value text-emerald">{{ data.stats.ai_unlock_rate ?? 100 }}%</strong>
-              <span class="gauge-sub">Claude / Gemini / GPT-4o</span>
-            </div>
-          </div>
-
-          <div class="metal-gauge-card">
-            <div class="gauge-metal-layer"></div>
-            <div class="gauge-icon streaming"><Tv :size="20" /></div>
-            <div class="gauge-meta">
-              <span class="gauge-label">流媒体原生贯通率</span>
-              <strong class="gauge-value text-sky">{{ data.stats.streaming_unlock_rate ?? 100 }}%</strong>
-              <span class="gauge-sub">4K 原生 / 免跨区限制</span>
-            </div>
-          </div>
-
-          <div class="metal-gauge-card">
-            <div class="gauge-metal-layer"></div>
-            <div class="gauge-icon purity"><ShieldCheck :size="20" /></div>
-            <div class="gauge-meta">
-              <span class="gauge-label">全网综合纯净度</span>
-              <strong class="gauge-value text-gold">{{ averagePurityScore }} <small>PTS</small></strong>
-              <span class="gauge-sub">多源欺诈数据库聚合</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <div v-if="loading" class="loading-line public-loading"></div>
 
       <!-- 金属卡片展厅 (未登录唯一视图) -->
-      <section class="public-cards-view">
+      <section class="public-cards-view" style="padding-top: 20px;">
         <div class="fleet-toolbar">
           <div class="region-filter-chips">
             <button
@@ -221,7 +164,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
           </div>
 
           <div class="fleet-meta-hint">
-            <span>💳 点击卡片查看完整 AI 与流媒体解锁详情</span>
+            <span>💳 点击卡片 3D 翻转查看完整 AI 与流媒体解锁及 IP 纯净度研判</span>
           </div>
         </div>
 
@@ -243,7 +186,6 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
         </div>
       </section>
 
-
     </main>
 
     <!-- Card Back: 3D Flip & Expand Detailed Inspection Modal -->
@@ -253,11 +195,11 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
           <div class="modal-foil"></div>
           <header class="modal-head">
             <div class="modal-title-wrap">
-              <span class="modal-flag">{{ inspectNode.country_code || inspectNode.region }}</span>
+              <span class="modal-flag">{{ inspectNode.country_code || inspectNode.region }}-{{ inspectNode.usage_type || '机房' }}</span>
               <div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <h3>{{ inspectNode.name }}</h3>
-                  <span class="card-back-tag">卡片背面 · 深度报告</span>
+                  <span class="card-back-tag">卡片背面 · 深度研判报告</span>
                 </div>
                 <small>{{ inspectNode.provider }} · {{ inspectNode.organization || 'Direct Carrier' }} · AS{{ inspectNode.asn }}</small>
               </div>
@@ -283,11 +225,11 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
                 </strong>
               </div>
               <div>
-                <span>原生/广播属性</span>
-                <strong style="color: #38bdf8;">原生机房 BGP</strong>
+                <span>属性 / 宽带类型</span>
+                <strong style="color: #38bdf8;">{{ inspectNode.ip_type || '原生' }} · {{ inspectNode.usage_type || '数据机房' }}</strong>
               </div>
               <div>
-                <span>DNSBL 信誉</span>
+                <span>DNSBL 邮件信誉</span>
                 <strong :class="inspectNode.dnsbl > 0 ? 'text-danger' : 'text-emerald'">
                   {{ inspectNode.dnsbl > 0 ? `命中 ${inspectNode.dnsbl} 项` : '未命中 (安全)' }}
                 </strong>
@@ -298,11 +240,16 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
             <div class="network-hud-bar">
               <div class="hud-item">
                 <span class="hud-label">公网脱敏 IP</span>
-                <code class="modal-ip">{{ inspectNode.masked_ip }}</code>
+                <code v-if="inspectNode.masked_ipv4 && inspectNode.masked_ipv6" class="modal-ip">
+                  {{ inspectNode.masked_ipv4 }} · {{ inspectNode.masked_ipv6 }}
+                </code>
+                <code v-else class="modal-ip">{{ inspectNode.masked_ip }}</code>
               </div>
               <div class="hud-item">
-                <span class="hud-label">协议栈支持</span>
-                <span class="hud-val">{{ (inspectNode.families?.length ? inspectNode.families : [inspectNode.family || 4]).map((f) => `IPv${f}`).join(' + ') }}</span>
+                <span class="hud-label">协议栈 & WARP</span>
+                <span class="hud-val" :style="{ color: inspectNode.is_warp ? '#f59e0b' : '#38bdf8' }">
+                  {{ inspectNode.is_warp ? ((inspectNode.families?.length ?? 1) > 1 ? 'IPv4(WARP) + IPv6' : 'WARP 双栈') : ((inspectNode.families?.length ? inspectNode.families : [inspectNode.family || 4]).map((f) => `IPv${f}`).join(' + ')) }}
+                </span>
               </div>
               <div class="hud-item">
                 <span class="hud-label">自治系统 ASN</span>

@@ -49,8 +49,10 @@ const makeUnlocks = (overrides?: {
 const node = (values: Partial<Node> & Pick<Node, 'id' | 'name'>): Node => {
   const defaultUnlocks = makeUnlocks()
   return {
-    provider: 'Vultr', region: '东京', family: 4, masked_ip: '203.0.113.*', asn: 20473,
-    organization: 'The Constant Company', country_code: 'JP', latitude: 35.6762, longitude: 139.6503,
+    provider: 'Vultr', region: '东京', family: 4, families: [4], masked_ip: '203.0.113.*',
+    masked_ipv4: '203.0.113.*', asn: 20473,
+    organization: 'The Constant Company', country_code: 'JP', usage_type: '机房', ip_type: '原生',
+    latitude: 35.6762, longitude: 139.6503,
     risk: 11, status: 'online', netflix: 'available', chatgpt: 'available',
     unlocks: defaultUnlocks, dnsbl: 0, ip_changed: false, can_view_full_ip: false,
     scan_interval_minutes: 360, quality_status: 'ready',
@@ -62,7 +64,9 @@ const node = (values: Partial<Node> & Pick<Node, 'id' | 'name'>): Node => {
 export const demoNodes: Node[] = [
   node({
     id: 'node_hkg_01', name: 'HK-CMI-01', provider: 'DMIT', region: '香港', masked_ip: '103.145.12.*',
-    asn: 906, organization: 'DMIT Cloud Services', country_code: 'HK', latitude: 22.3193, longitude: 114.1694,
+    masked_ipv4: '103.145.12.*', masked_ipv6: '2402:4e00:1000::*', families: [4, 6],
+    asn: 906, organization: 'DMIT Cloud Services', country_code: 'HK', usage_type: '机房', ip_type: '原生',
+    latitude: 22.3193, longitude: 114.1694,
     risk: 18, status: 'online', netflix: 'available', chatgpt: 'available', dnsbl: 0,
     last_seen: ago(1), last_scan: ago(120),
     unlocks: makeUnlocks({
