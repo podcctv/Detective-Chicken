@@ -72,7 +72,20 @@ export interface Node {
   scan_interval_minutes?: number
   quality_status?: 'pending' | 'scanning' | 'ready' | 'partial' | 'failed' | ''
   last_scan_error?: string
+  last_task?: TaskLog
 }
+
+export interface TaskLog {
+  id: string
+  node_id: string
+  type: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  message: string
+  error?: string
+  created_at: string
+  updated_at: string
+}
+
 
 export interface TrendPoint {
   at: string
@@ -136,6 +149,7 @@ export interface NetworkSnapshot {
 export interface NodeDetail extends Node {
   series: TrendPoint[]
   alerts: Alert[]
+  tasks?: TaskLog[]
   latest_quality?: Quality
   latest_collector?: {
     name: string
@@ -145,6 +159,7 @@ export interface NodeDetail extends Node {
   report_time?: string
   networks: NetworkSnapshot[]
 }
+
 
 export interface Dashboard {
   generated_at: string

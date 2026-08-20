@@ -45,11 +45,19 @@ func main() {
 			fatal(err.Error())
 		}
 		fmt.Printf("heartbeat accepted; quality interval %s\n", formatInterval(directive.ScanIntervalMinutes))
-		if directive.ScanDue {
+		hasScanCmd := false
+		for _, cmd := range directive.Commands {
+			if cmd.Type == "scan" {
+				hasScanCmd = true
+				break
+			}
+		}
+		if directive.ScanDue || hasScanCmd {
 			if err := scanAndUpload(client, *scriptURL, nil); err != nil {
 				fatal(err.Error())
 			}
 		}
+
 	case "scan":
 		client := load(*configPath)
 		families, err := requestedFamilies(*family)

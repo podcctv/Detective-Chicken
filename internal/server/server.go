@@ -66,6 +66,7 @@ func (a *API) routes(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"items": a.store.DashboardFor(p.User.ID, p.User.Role == "admin").Alerts})
 	}))
 	mux.HandleFunc("POST /api/v1/nodes/{id}/scan", a.authenticated(a.scan))
+	mux.HandleFunc("GET /api/v1/nodes/{id}/tasks", a.authenticated(a.nodeTasks))
 	mux.HandleFunc("POST /api/v1/nodes/{id}/reinstall", a.authenticated(a.reinstallNode))
 	mux.HandleFunc("POST /api/v1/enrollment-tokens", a.authenticated(a.enrollment))
 	mux.HandleFunc("POST /api/v1/agents/register", a.register)
@@ -270,11 +271,26 @@ func (a *API) heartbeat(w http.ResponseWriter, r *http.Request, body []byte, age
 	}
 	writeJSON(w, 202, map[string]any{"accepted": true, "scan_due": due, "scan_interval_minutes": interval, "commands": commands})
 }
+
+func (a *API) nodeTasks(w http.ResponseWriter, r *http.Request) {
+	principal := requestPrincipal(r)
+	nodeID := r.PathValue("id")
+	tasks, err := a.store.NodeTasks(nodeID, principal.User.ID, principal.User.Role == "admin")
+	if err != nil {
+		apiError(w, 404, "NODE_NOT_FOUND", "node not found")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"items": tasks})
+}
+
 func (a *API) report(w http.ResponseWriter, r *http.Request, body []byte, agent store.AgentKey) {
 	var report model.Report
 	if err := json.Unmarshal(body, &report); err != nil {
 		apiError(w, 400, "INVALID_PAYLOAD", err.Error())
 		return
+	}
+	if report.SchemaVersion == "" {
+		report.SchemaVersion = "1.0"
 	}
 	if report.SchemaVersion != "1.0" {
 		apiError(w, 422, "SCHEMA_UNSUPPORTED", "only schema_version 1.0 is supported")
@@ -298,6 +314,7 @@ func (a *API) report(w http.ResponseWriter, r *http.Request, body []byte, agent 
 	}
 	writeJSON(w, 202, map[string]any{"accepted": true, "report_id": report.ReportID})
 }
+
 func (a *API) commands(w http.ResponseWriter, r *http.Request, body []byte, agent store.AgentKey) {
 	writeJSON(w, 200, map[string]any{"items": a.store.Commands(agent.AgentID)})
 }

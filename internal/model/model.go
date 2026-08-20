@@ -64,7 +64,20 @@ type Node struct {
 	ScanIntervalMinutes int         `json:"scan_interval_minutes"`
 	QualityStatus       string      `json:"quality_status"`
 	LastScanError       string      `json:"last_scan_error,omitempty"`
+	LastTask            *TaskLog    `json:"last_task,omitempty"`
 }
+
+type TaskLog struct {
+	ID        string    `json:"id"`
+	NodeID    string    `json:"node_id"`
+	Type      string    `json:"type"`       // "scan" | "reinstall"
+	Status    string    `json:"status"`     // "pending" | "running" | "completed" | "failed"
+	Message   string    `json:"message"`
+	Error     string    `json:"error,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 
 type User struct {
 	ID          string    `json:"id"`
@@ -176,11 +189,13 @@ type NodeDetail struct {
 	Node
 	Series          []TrendPoint      `json:"series"`
 	Alerts          []Alert           `json:"alerts"`
+	Tasks           []TaskLog         `json:"tasks"`
 	Networks        []NetworkSnapshot `json:"networks"`
 	LatestQuality   *Quality          `json:"latest_quality,omitempty"`
 	LatestCollector *Collector        `json:"latest_collector,omitempty"`
 	ReportTime      *time.Time        `json:"report_time,omitempty"`
 }
+
 
 type NetworkSnapshot struct {
 	Family       int         `json:"family"`

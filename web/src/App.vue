@@ -9,18 +9,22 @@ import {
 } from 'vue'
 import {
   Activity,
+  AlertCircle,
   AlertTriangle,
   Bell,
   Bot,
+  Check,
   CheckCircle2,
   ChevronRight,
   CircleGauge,
+  Clock,
   Cloud,
   Columns,
   Copy,
   Cpu,
   Eye,
   EyeOff,
+  FileText,
   Globe2,
   KeyRound,
   Layers,
@@ -32,7 +36,6 @@ import {
   Moon,
   Network,
   Plus,
-  Radar,
   RefreshCw,
   ScanLine,
   Search,
@@ -41,6 +44,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sun,
+  Terminal,
   Tv,
   UserCog,
   Wrench,
@@ -50,9 +54,7 @@ import {
 
 import StatusBadge from './components/StatusBadge.vue'
 import PublicShowcase from './components/PublicShowcase.vue'
-import Globe3D from './components/Globe3D.vue'
 import UnlockMatrix from './components/UnlockMatrix.vue'
-import RadarScanner3D from './components/RadarScanner3D.vue'
 import NodeCompareModal from './components/NodeCompareModal.vue'
 import type {
   AuthStatus,
@@ -60,6 +62,7 @@ import type {
   Enrollment,
   Node,
   NodeDetail,
+  TaskLog,
   User,
 } from './types'
 
@@ -84,7 +87,27 @@ const loading = ref(true)
 const refreshing = ref(false)
 const dark = ref(true)
 const menuOpen = ref(false)
-const viewMode = ref<'matrix' | 'fleet' | 'deck' | 'radar' | 'alerts' | 'settings'>('matrix')
+const viewMode = ref<'matrix' | 'fleet' | 'alerts' | 'settings'>('matrix')
+
+const logNode = ref<Node | null>(null)
+const logModalOpen = ref(false)
+const nodeTasks = ref<TaskLog[]>([])
+const taskLoading = ref(false)
+
+const openTasksAndLogs = async (node: Node) => {
+  logNode.value = node
+  logModalOpen.value = true
+  taskLoading.value = true
+  try {
+    const res = await api<{ items: TaskLog[] }>(`/api/v1/nodes/${node.id}/tasks`)
+    nodeTasks.value = res.items || []
+  } catch {
+    nodeTasks.value = node.last_task ? [node.last_task] : []
+  } finally {
+    taskLoading.value = false
+  }
+}
+
 
 
 const search = ref('')
@@ -626,14 +649,6 @@ onBeforeUnmount(() => {
       <nav class="sidebar-nav" aria-label="主导航">
         <button
           class="nav-btn"
-          :class="{ active: viewMode === 'deck' }"
-          @click="viewMode = 'deck'; menuOpen = false"
-        >
-          <LayoutDashboard :size="18" />
-          <span>3D 全球战情台</span>
-        </button>
-        <button
-          class="nav-btn"
           :class="{ active: viewMode === 'matrix' }"
           @click="viewMode = 'matrix'; menuOpen = false"
         >
@@ -648,14 +663,6 @@ onBeforeUnmount(() => {
           <Server :size="18" />
           <span>小鸡资产清单</span>
           <small>{{ data.stats.total ?? data.nodes.length }}</small>
-        </button>
-        <button
-          class="nav-btn"
-          :class="{ active: viewMode === 'radar' }"
-          @click="viewMode = 'radar'; menuOpen = false"
-        >
-          <Radar :size="18" />
-          <span>3D 全息多维雷达</span>
         </button>
         <button
           class="nav-btn"
@@ -719,14 +726,12 @@ onBeforeUnmount(() => {
           </button>
           <div>
             <h1>
-              <template v-if="viewMode === 'deck'">3D 舰队战情总览</template>
-              <template v-else-if="viewMode === 'matrix'">AI & 流媒体解锁全景矩阵</template>
-              <template v-else-if="viewMode === 'fleet'">VPS 节点资产列表</template>
-              <template v-else-if="viewMode === 'radar'">3D 全息多维雷达</template>
+              <template v-if="viewMode === 'matrix'">AI & 流媒体解锁全景矩阵</template>
+              <template v-else-if="viewMode === 'fleet'">小鸡资产清单与诊断中心</template>
               <template v-else-if="viewMode === 'alerts'">安全威胁与解锁告警</template>
               <template v-else>系统设置与自动化配置</template>
             </h1>
-            <p>实时追踪多区 IP 欺诈分、网络身份变更及 20+ 款 AI 与主流流媒体封锁状态</p>
+            <p>实时并发追踪多区 IP 欺诈分、网络身份变更及 20+ 款 AI 与主流流媒体解锁状态</p>
           </div>
         </div>
 
@@ -757,7 +762,7 @@ onBeforeUnmount(() => {
 
       <div v-if="loading" class="loading-line"></div>
 
-      <!-- KPI Metrics Grid with 3D Perspective Tilt -->
+      <!-- KPI Metrics Grid -->
       <section class="tilt-container">
         <div class="kpi-grid" aria-label="关键指标">
           <article
@@ -780,121 +785,26 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <!-- View Mode 1: 3D Command Deck (Globe + Analytics + Alerts) -->
-      <template v-if="viewMode === 'deck'">
-        <section style="margin-bottom: 16px;">
-          <Globe3D
-            :nodes="data.nodes"
-            :selected-id="selected?.id"
-            @select="(n) => { openNode(n); drawerTab = 'overview' }"
-          />
-        </section>
-
-        <section class="deck-grid">
-          <div class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>风险分与欺诈度历史趋势</h2>
-                <p>最近 10 天 · 12 小时高精度聚合</p>
-              </div>
-              <span class="trend-change" style="color: var(--danger); font-family: 'Fira Code', monospace; font-weight: 700;">
-                +31 <small style="font-size: 10px; color: var(--muted);">24h 波动</small>
-              </span>
-            </div>
-            <TrendChart :points="data.trend" />
-            <div class="chart-foot">
-              <span><i class="anomaly-dot"></i>异常飙升点（触发告警）</span>
-              <span>最近上报 {{ relative(data.generated_at) }}</span>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>实时告警流</h2>
-                <p>状态降级与身份异动监控</p>
-              </div>
-              <button
-                class="icon-btn"
-                style="width: 28px; height: 28px;"
-                title="查看全部告警"
-                @click="viewMode = 'alerts'"
-              >
-                <ChevronRight :size="15" />
-              </button>
-            </div>
-            <div class="alert-list">
-              <button
-                v-for="alert in data.alerts"
-                :key="alert.id"
-                class="alert-row"
-                @click="
-                  () => {
-                    const n = data.nodes.find((item) => item.id === alert.node_id)
-                    if (n) { openNode(n); drawerTab = 'overview' }
-                  }
-                "
-              >
-                <span class="alert-mark" :class="alert.severity">
-                  <ShieldAlert v-if="alert.severity === 'critical'" :size="16" />
-                  <AlertTriangle v-else :size="16" />
-                </span>
-                <span class="alert-copy">
-                  <strong>{{ alert.title }}</strong>
-                  <span>{{ alert.node_name }} · {{ alert.detail }}</span>
-                  <small>{{ relative(alert.created_at) }}</small>
-                </span>
-                <ChevronRight :size="15" style="color: var(--faint);" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <!-- Unlock Matrix Preview in Command Deck -->
-        <section class="panel" style="margin-bottom: 16px; padding: 14px 16px;">
-          <div class="panel-head" style="border: 0; padding: 0 0 12px 0;">
-            <div>
-              <h2>AI 与流媒体全景矩阵简报</h2>
-              <p>实时 20+ 项大模型与流媒体连通性检测</p>
-            </div>
-            <button
-              class="secondary-btn"
-              style="height: 30px; font-size: 11px;"
-              @click="viewMode = 'matrix'"
-            >
-              查看完整矩阵视图 <ChevronRight :size="14" />
-            </button>
-          </div>
-          <UnlockMatrix
-            :nodes="data.nodes"
-            :services="data.services"
-            :selected-node-id="selected?.id"
-            @select-node="(n) => { openNode(n); drawerTab = 'overview' }"
-            @compare-nodes="openCompare"
-          />
-        </section>
-      </template>
-
-      <!-- View Mode 2: Full-screen AI & Streaming Unlock Matrix -->
-      <template v-else-if="viewMode === 'matrix'">
+      <!-- View Mode 1: Full-screen AI & Streaming Unlock Matrix (默认主视图) -->
+      <template v-if="viewMode === 'matrix'">
         <section style="margin-bottom: 16px;">
           <UnlockMatrix
             :nodes="data.nodes"
             :services="data.services"
             :selected-node-id="selected?.id"
-            @select-node="(n) => { openNode(n); drawerTab = 'overview' }"
+            @select-node="(n) => { openTasksAndLogs(n) }"
             @compare-nodes="openCompare"
           />
         </section>
       </template>
 
-      <!-- View Mode 3: Fleet Nodes Asset Management Table -->
+      <!-- View Mode 2: Fleet Nodes Asset Management Table (整合任务、扫描、重装与日志) -->
       <template v-else-if="viewMode === 'fleet'">
         <section class="panel fleet-panel">
           <div class="fleet-head">
             <div>
-              <h2>小鸡节点资产明细</h2>
-              <p>共 {{ filteredNodes.length }} 个节点，按风险度与可用性排序</p>
+              <h2>小鸡节点资产清单与任务状态</h2>
+              <p>共 {{ filteredNodes.length }} 个节点 · 点击任意节点可直接调取任务生命周期与深度日志</p>
             </div>
             <div class="fleet-tools">
               <label class="search-field">
@@ -929,15 +839,10 @@ onBeforeUnmount(() => {
                   <th>节点资产</th>
                   <th>公网 IP / 协议族</th>
                   <th>ASN / 归属机构</th>
-                  <th>综合风险</th>
-                  <th>Netflix</th>
-                  <th>ChatGPT</th>
-                  <th>Claude</th>
-                  <th>Disney+</th>
-                  <th>DNSBL</th>
-                  <th>上次扫描</th>
-                  <th>状态</th>
-                  <th><span class="sr-only">操作</span></th>
+                  <th>综合风险评分</th>
+                  <th>任务与扫描生命周期</th>
+                  <th>连接状态</th>
+                  <th>操作管理</th>
                 </tr>
               </thead>
               <tbody>
@@ -945,14 +850,14 @@ onBeforeUnmount(() => {
                   v-for="node in filteredNodes"
                   :key="node.id"
                   tabindex="0"
-                  @click="openNode(node); drawerTab = 'overview'"
+                  @click="openTasksAndLogs(node)"
                 >
                   <td>
                     <div class="node-name">
                       <span class="country-code">{{ node.country_code || '--' }}</span>
                       <div>
                         <strong style="color: var(--text);">{{ node.name }}</strong>
-                        <small style="color: var(--muted);">{{ node.provider }}</small>
+                        <small style="color: var(--muted);">{{ node.provider || 'VPS' }}</small>
                       </div>
                     </div>
                   </td>
@@ -969,61 +874,59 @@ onBeforeUnmount(() => {
                   <td>
                     <div class="risk-cell">
                       <strong :class="riskClass(node.risk)">{{ node.risk }}</strong>
-                      <span>{{ riskLabel(node.risk) }}风险</span>
+                      <span>{{ riskLabel(node.risk) }}风险 (DNSBL: {{ node.dnsbl }})</span>
                     </div>
                   </td>
                   <td>
-                    <StatusBadge
-                      :value="node.unlocks?.streaming?.netflix?.status ?? node.netflix"
-                      :region="node.unlocks?.streaming?.netflix?.region"
-                    />
-                  </td>
-                  <td>
-                    <StatusBadge
-                      :value="node.unlocks?.ai?.chatgpt?.status ?? node.chatgpt"
-                      :region="node.unlocks?.ai?.chatgpt?.region"
-                    />
-                  </td>
-                  <td>
-                    <StatusBadge
-                      :value="node.unlocks?.ai?.claude?.status ?? 'available'"
-                      :region="node.unlocks?.ai?.claude?.region"
-                    />
-                  </td>
-                  <td>
-                    <StatusBadge
-                      :value="node.unlocks?.streaming?.disney?.status ?? 'available'"
-                      :region="node.unlocks?.streaming?.disney?.region"
-                    />
-                  </td>
-                  <td>
-                    <span class="dnsbl" :class="{ hit: node.dnsbl > 0 }">{{ node.dnsbl }}</span>
-                  </td>
-                  <td>
-                    <span style="color: var(--muted); font-size: 11px;">{{ relative(node.last_scan) }}</span>
+                    <!-- Real-time Task Lifecycle Status -->
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                      <span v-if="node.quality_status === 'scanning' || node.last_task?.status === 'pending' || node.last_task?.status === 'running'" class="task-badge-pill scanning">
+                        <RefreshCw :size="12" class="spinning" />
+                        <span>{{ node.last_task?.message || '探测 20+ 服务中...' }}</span>
+                      </span>
+                      <span v-else-if="node.quality_status === 'failed' || node.last_scan_error" class="task-badge-pill failed" :title="node.last_scan_error || '探测异常'">
+                        <AlertCircle :size="12" />
+                        <span>扫描异常 (点击看日志)</span>
+                      </span>
+                      <span v-else-if="node.last_scan && new Date(node.last_scan).getFullYear() > 1" class="task-badge-pill ready">
+                        <Check :size="12" />
+                        <span>已完成 · {{ relative(node.last_scan) }}</span>
+                      </span>
+                      <span v-else class="task-badge-pill pending">
+                        <Clock :size="12" />
+                        <span>等待首次扫描</span>
+                      </span>
+                    </div>
                   </td>
                   <td>
                     <StatusBadge :value="node.status" />
                   </td>
-                  <td style="white-space: nowrap;">
+                  <td class="table-actions-cell" @click.stop>
                     <button
-                      class="icon-btn"
-                      style="width: 30px; height: 30px; margin-right: 4px;"
-                      title="重装小鸡脚本"
-                      @click.stop="triggerReinstall(node)"
+                      class="table-action-btn scan"
+                      title="立即全面扫描 (下发 20+ 项服务并发探测)"
+                      @click="scan(node)"
                     >
-                      <Wrench :size="14" />
+                      <ScanLine :size="13" />
+                      <span>立即扫描</span>
                     </button>
                     <button
-                      class="icon-btn"
-                      style="width: 30px; height: 30px;"
-                      title="打开详情抽屉"
-                      @click.stop="openNode(node); drawerTab = 'overview'"
+                      class="table-action-btn reinstall"
+                      title="小鸡重装系统后一键重新接入"
+                      @click="triggerReinstall(node)"
                     >
-                      <ChevronRight :size="16" />
+                      <Wrench :size="13" />
+                      <span>重装探针</span>
+                    </button>
+                    <button
+                      class="table-action-btn logs"
+                      title="查看任务生命周期、心跳与详细运行日志"
+                      @click="openTasksAndLogs(node)"
+                    >
+                      <FileText :size="13" />
+                      <span>任务日志</span>
                     </button>
                   </td>
-
                 </tr>
               </tbody>
             </table>
@@ -1031,16 +934,6 @@ onBeforeUnmount(() => {
         </section>
       </template>
 
-      <!-- View Mode 4: 3D Holographic Radar Scanner -->
-      <template v-else-if="viewMode === 'radar'">
-        <section style="margin-bottom: 16px;">
-          <RadarScanner3D
-            :nodes="data.nodes"
-            :active-node="selected"
-            @select-node="(n) => { openNode(n) }"
-          />
-        </section>
-      </template>
 
       <!-- View Mode 5: Alerts & Threat Center -->
       <template v-else-if="viewMode === 'alerts'">
@@ -1325,6 +1218,101 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
+    <!-- Task Timeline & Diagnostics Modal -->
+    <Transition name="modal">
+      <div v-if="logModalOpen && logNode" class="modal-backdrop" @click.self="logModalOpen = false">
+        <section class="modal task-modal" role="dialog" aria-modal="true">
+          <div class="modal-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="country-code large">{{ logNode.country_code || '--' }}</span>
+              <div>
+                <h2>任务生命周期与运行日志 · {{ logNode.name }}</h2>
+                <p>{{ logNode.provider || 'VPS' }} · {{ logNode.masked_ip }} · AS{{ logNode.asn }} ({{ logNode.organization }})</p>
+              </div>
+            </div>
+            <button class="icon-btn" aria-label="关闭" @click="logModalOpen = false">
+              <X :size="18" />
+            </button>
+          </div>
+
+          <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+            <!-- Current Status Bar -->
+            <div class="task-status-hero" :class="logNode.quality_status">
+              <div class="status-left">
+                <RefreshCw v-if="logNode.quality_status === 'scanning'" :size="22" class="spinning text-sky" />
+                <AlertCircle v-else-if="logNode.quality_status === 'failed' || logNode.last_scan_error" :size="22" class="text-danger" />
+                <Check v-else :size="22" class="text-emerald" />
+                <div>
+                  <strong>
+                    {{ logNode.quality_status === 'scanning' ? '探测任务并发执行中...' : (logNode.quality_status === 'failed' || logNode.last_scan_error) ? '探测任务异常 / 待重试' : '探针待命就绪' }}
+                  </strong>
+                  <span>上次扫描: {{ relative(logNode.last_scan) }} · 最近心跳: {{ relative(logNode.last_seen) }}</span>
+                </div>
+              </div>
+              <button class="primary-btn" style="height: 32px; font-size: 11.5px;" @click="scan(logNode)">
+                <ScanLine :size="14" /> 重新下发扫描
+              </button>
+            </div>
+
+            <!-- Error message box if failed -->
+            <div v-if="logNode.last_scan_error" class="error-detail-box">
+              <div class="error-head">
+                <AlertCircle :size="14" />
+                <span>探针异常详细日志与报错堆栈:</span>
+              </div>
+              <code>{{ logNode.last_scan_error }}</code>
+            </div>
+
+            <!-- Tasks Timeline -->
+            <div class="timeline-container">
+              <div class="timeline-title">
+                <FileText :size="14" />
+                <span>任务执行历史时间线</span>
+              </div>
+
+              <div v-if="taskLoading" class="loading-line" style="margin: 8px 0;"></div>
+
+              <div v-if="nodeTasks.length" class="timeline-list">
+                <div
+                  v-for="task in nodeTasks"
+                  :key="task.id"
+                  class="timeline-item"
+                  :class="task.status"
+                >
+                  <div class="timeline-dot"></div>
+                  <div class="timeline-content">
+                    <div class="timeline-header">
+                      <span class="task-type-badge">{{ task.type === 'scan' ? '深度全量 20+ 服务扫描' : task.type }}</span>
+                      <span class="task-status-pill" :class="task.status">
+                        {{ task.status === 'pending' ? '排队中' : task.status === 'running' ? '探测中' : task.status === 'completed' ? '已完成' : '失败' }}
+                      </span>
+                      <span class="task-time">{{ relative(task.created_at) }} ({{ new Date(task.created_at).toLocaleTimeString() }})</span>
+                    </div>
+                    <p class="task-msg">{{ task.message }}</p>
+                    <code v-if="task.error" class="task-err">{{ task.error }}</code>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="empty-timeline">
+                <Clock :size="24" />
+                <span>暂无历史任务记录，点击上方按钮即可一键下发</span>
+              </div>
+            </div>
+
+            <!-- Quick Action Footer -->
+            <div class="task-modal-footer">
+              <button class="secondary-btn" @click="triggerReinstall(logNode)">
+                <Wrench :size="14" /> 重装小鸡探针
+              </button>
+              <button class="secondary-btn" @click="openTasksAndLogs(logNode)">
+                <RefreshCw :size="14" :class="{ spinning: taskLoading }" /> 刷新任务日志
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Transition>
+
     <!-- Side-by-Side Compare Modal -->
     <NodeCompareModal
       v-if="compareModalOpen"
@@ -1337,6 +1325,7 @@ onBeforeUnmount(() => {
     <!-- Reinstall VPS Modal -->
     <Transition name="modal">
       <div v-if="reinstallModalOpen && reinstallData" class="modal-backdrop" @click.self="reinstallModalOpen = false">
+
         <section class="modal" role="dialog" aria-modal="true">
           <div class="modal-head">
             <div>

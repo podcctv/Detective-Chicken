@@ -68,14 +68,20 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	if collectErr != nil && len(nativeResults) > 0 {
 		// Fallback report if upstream script totally failed
 		report = model.Report{
-			ReportID:    newID("rep"),
-			CollectedAt: time.Now().UTC(),
-			Network:     model.Network{Family: family},
-			Quality:     model.Quality{},
+			SchemaVersion: "1.0",
+			ReportID:      newID("rpt"),
+			CollectedAt:   time.Now().UTC(),
+			Collector: model.Collector{
+				Name:           "native-prober",
+				AdapterVersion: Version,
+			},
+			Network: model.Network{Family: family},
+			Quality: model.Quality{},
 		}
 	} else if collectErr != nil {
 		return model.Report{}, collectErr
 	}
+
 
 	// Merge Native Prober results into report.Quality.Media
 	if report.Quality.Media == nil {

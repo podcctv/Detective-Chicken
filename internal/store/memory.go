@@ -61,6 +61,7 @@ type Memory struct {
 	nonces              map[string]time.Time
 	reports             map[string]model.Report
 	commands            map[string][]Command
+	tasks               map[string][]model.TaskLog
 	users               map[string]UserAccount
 	usernames           map[string]string
 	sessions            map[string]Session
@@ -74,10 +75,11 @@ func NewMemory(seed bool) *Memory {
 		nodes: make(map[string]model.Node), series: make(map[string][]model.TrendPoint),
 		agents: make(map[string]AgentKey), enrollments: make(map[string]Enrollment),
 		nonces: make(map[string]time.Time), reports: make(map[string]model.Report),
-		commands: make(map[string][]Command), users: make(map[string]UserAccount),
-		usernames: make(map[string]string), sessions: make(map[string]Session),
-		passwordResets: make(map[string]PasswordReset),
+		commands: make(map[string][]Command), tasks: make(map[string][]model.TaskLog),
+		users: make(map[string]UserAccount), usernames: make(map[string]string),
+		sessions: make(map[string]Session), passwordResets: make(map[string]PasswordReset),
 	}
+
 	if seed {
 		m.seed()
 	}
@@ -580,9 +582,7 @@ func (m *Memory) nodesLocked() []model.Node {
 	return nodes
 }
 
-func (m *Memory) Nodes() []model.Node { m.mu.RLock(); defer m.mu.RUnlock(); return m.nodesLocked() }
-
-func nodeView(raw model.Node, userID string, admin, fullIP bool) model.Node {
+func (m *Memory) nodeView(raw model.Node, userID string, admin, fullIP bool) model.Node {
 	view := raw
 	if view.ScanIntervalMinutes == 0 {
 		view.ScanIntervalMinutes = DefaultScanIntervalMinutes
@@ -591,6 +591,10 @@ func nodeView(raw model.Node, userID string, admin, fullIP bool) model.Node {
 	view.IPAddress = raw.MaskedIP
 	if fullIP && view.CanViewFullIP {
 		view.IPAddress = raw.ReportedIP
+	}
+	if taskList, ok := m.tasks[raw.ID]; ok && len(taskList) > 0 {
+		last := taskList[len(taskList)-1]
+		view.LastTask = &last
 	}
 	return view
 }
@@ -601,7 +605,7 @@ func (m *Memory) nodesForLocked(userID string, admin bool) []model.Node {
 		if !admin && raw.OwnerUserID != userID {
 			continue
 		}
-		nodes = append(nodes, nodeView(raw, userID, admin, false))
+		nodes = append(nodes, m.nodeView(raw, userID, admin, false))
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Risk > nodes[j].Risk })
 	return nodes
@@ -613,6 +617,16 @@ func (m *Memory) NodesFor(userID string, admin bool) []model.Node {
 	return m.nodesForLocked(userID, admin)
 }
 
+func (m *Memory) NodeTasks(nodeID, userID string, admin bool) ([]model.TaskLog, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	raw, ok := m.nodes[nodeID]
+	if !ok || (!admin && raw.OwnerUserID != userID) {
+		return nil, ErrNotFound
+	}
+	return append([]model.TaskLog(nil), m.tasks[nodeID]...), nil
+}
+
 func (m *Memory) NodeDetailFor(id, userID string, admin, fullIP bool) (model.NodeDetail, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -621,11 +635,13 @@ func (m *Memory) NodeDetailFor(id, userID string, admin, fullIP bool) (model.Nod
 		return model.NodeDetail{}, ErrNotFound
 	}
 	detail := model.NodeDetail{
-		Node:     nodeView(raw, userID, admin, fullIP),
+		Node:     m.nodeView(raw, userID, admin, fullIP),
 		Series:   append([]model.TrendPoint{}, m.series[id]...),
 		Alerts:   make([]model.Alert, 0),
+		Tasks:    append([]model.TaskLog(nil), m.tasks[id]...),
 		Networks: make([]model.NetworkSnapshot, 0),
 	}
+
 	for _, alert := range m.alerts {
 		if alert.NodeID == id {
 			detail.Alerts = append(detail.Alerts, alert)
@@ -847,6 +863,24 @@ func (m *Memory) SaveHeartbeat(h model.Heartbeat) error {
 		n.ReportedIP = h.ReportedIP
 		n.MaskedIP = MaskIP(h.ReportedIP)
 	}
+
+	// Update task log
+	if taskList, ok := m.tasks[n.ID]; ok && len(taskList) > 0 {
+		last := &taskList[len(taskList)-1]
+		if n.QualityStatus == "scanning" && (last.Status == "pending" || last.Status == "running") {
+			last.Status = "running"
+			last.Message = "探针已接单，正在并发探测 20+ 款 AI 与流媒体服务并核验 IP 纯净度..."
+			last.UpdatedAt = time.Now().UTC()
+			n.LastTask = last
+		} else if n.QualityStatus == "failed" && (last.Status == "pending" || last.Status == "running") {
+			last.Status = "failed"
+			last.Message = "探测任务异常"
+			last.Error = n.LastScanError
+			last.UpdatedAt = time.Now().UTC()
+			n.LastTask = last
+		}
+	}
+
 	m.nodes[n.ID] = n
 	m.persistLocked()
 	return nil
@@ -896,6 +930,18 @@ func (m *Memory) SaveReport(r model.Report) error {
 	n.Status = "online"
 	n.QualityStatus = "ready"
 	n.LastScanError = ""
+
+	// Update task log
+	if taskList, ok := m.tasks[n.ID]; ok && len(taskList) > 0 {
+		last := &taskList[len(taskList)-1]
+		if last.Status == "pending" || last.Status == "running" {
+			last.Status = "completed"
+			last.Message = fmt.Sprintf("20+ 项服务深度探测完成并成功上报 (Report: %s)", r.ReportID)
+			last.UpdatedAt = time.Now().UTC()
+			n.LastTask = last
+		}
+	}
+
 	m.nodes[n.ID] = n
 	m.reports[r.ReportID] = r
 	m.series[n.ID] = append(m.series[n.ID], model.TrendPoint{At: r.CollectedAt, Risk: reportRisk, IPQS: reportRisk})
@@ -938,7 +984,7 @@ func (m *Memory) UpdateNodeScanInterval(nodeID string, minutes int) (model.Node,
 	n.ScanIntervalMinutes = minutes
 	m.nodes[nodeID] = n
 	m.persistLocked()
-	return nodeView(n, n.OwnerUserID, true, false), nil
+	return m.nodeView(n, n.OwnerUserID, true, false), nil
 }
 
 func score(scores map[string]json.RawMessage, key string) int {
@@ -1001,8 +1047,22 @@ func (m *Memory) CreateScan(nodeID string) (Command, error) {
 	if !ok {
 		return Command{}, ErrNotFound
 	}
-	c := Command{ID: randomID("cmd"), Type: "scan", CreatedAt: time.Now().UTC()}
+	now := time.Now().UTC()
+	c := Command{ID: randomID("cmd"), Type: "scan", CreatedAt: now}
 	m.commands[n.AgentID] = append(m.commands[n.AgentID], c)
+	n.QualityStatus = "scanning"
+	task := model.TaskLog{
+		ID:        randomID("task"),
+		NodeID:    nodeID,
+		Type:      "scan",
+		Status:    "pending",
+		Message:   "已下发 20+ 项 AI 与流媒体深度探测任务，等待探针接单...",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	m.tasks[nodeID] = append(m.tasks[nodeID], task)
+	n.LastTask = &task
+	m.nodes[nodeID] = n
 	m.persistLocked()
 	return c, nil
 }
@@ -1015,3 +1075,4 @@ func (m *Memory) Commands(agentID string) []Command {
 	m.persistLocked()
 	return c
 }
+
