@@ -1529,7 +1529,10 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <!-- Login / Register Modal -->
+  </div>
+
+  <!-- Global Login / Register Modal (Available for both authenticated & unauthenticated visitors) -->
+  <Teleport to="body">
     <Transition name="modal">
       <div v-if="loginOpen" class="modal-backdrop" @click.self="loginOpen = false">
         <section class="modal" role="dialog" aria-modal="true" style="width: min(440px, 100%);">
@@ -1604,7 +1607,7 @@ onBeforeUnmount(() => {
         <span>{{ toast }}</span>
       </div>
     </Transition>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>

@@ -59,6 +59,43 @@ const keyServices = computed(() => {
     }
   })
 })
+const flagImgError = ref(false)
+
+// Normalize country code for FlagCDN and Flag Emoji
+const normalizedCountryCode = computed(() => {
+  const code = (props.node.country_code || '').trim().toLowerCase()
+  if (code.length === 2 && /^[a-z]{2}$/.test(code)) {
+    if (code === 'uk') return 'gb'
+    return code
+  }
+  const reg = (props.node.region || '').toLowerCase()
+  const map: Record<string, string> = {
+    '香港': 'hk', 'hong kong': 'hk', 'hongkong': 'hk', 'hk': 'hk',
+    '美国': 'us', 'united states': 'us', 'usa': 'us', 'us': 'us',
+    '日本': 'jp', 'japan': 'jp', 'jp': 'jp',
+    '新加坡': 'sg', 'singapore': 'sg', 'sg': 'sg',
+    '台湾': 'tw', 'taiwan': 'tw', 'tw': 'tw',
+    '德国': 'de', 'germany': 'de', 'de': 'de',
+    '英国': 'gb', 'united kingdom': 'gb', 'uk': 'gb', 'gb': 'gb',
+    '法国': 'fr', 'france': 'fr', 'fr': 'fr',
+    '韩国': 'kr', 'korea': 'kr', 'kr': 'kr',
+    '加拿大': 'ca', 'canada': 'ca', 'ca': 'ca',
+    '荷兰': 'nl', 'netherlands': 'nl', 'nl': 'nl',
+    '澳大利亚': 'au', 'australia': 'au', 'au': 'au',
+    '俄罗斯': 'ru', 'russia': 'ru', 'ru': 'ru',
+  }
+  for (const [k, v] of Object.entries(map)) {
+    if (reg.includes(k)) return v
+  }
+  return ''
+})
+
+const countryFlagEmoji = computed(() => {
+  const code = normalizedCountryCode.value
+  if (!code || code.length !== 2) return '🌐'
+  const offset = 127397
+  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => c.charCodeAt(0) + offset))
+})
 </script>
 
 <template>
@@ -76,8 +113,18 @@ const keyServices = computed(() => {
     >
       <!-- Metallic Foil, Brushed Shading -->
       <div class="card-metal-sheen"></div>
-      <!-- Semi-transparent country flag background -->
-      <div class="card-flag-bg" aria-hidden="true">{{ node.country_code || node.region || '🌐' }}</div>
+      <!-- Semi-transparent real national flag background covering right half -->
+      <div class="card-flag-container" aria-hidden="true">
+        <img
+          v-if="normalizedCountryCode && !flagImgError"
+          :src="`https://flagcdn.com/w640/${normalizedCountryCode}.png`"
+          class="card-flag-img"
+          alt=""
+          loading="lazy"
+          @error="flagImgError = true"
+        />
+        <span v-else class="card-flag-emoji">{{ countryFlagEmoji }}</span>
+      </div>
       <div class="card-border-glow"></div>
 
       <!-- Top Header Row: EMV Microchip, Provider, Region Pill -->
@@ -224,21 +271,39 @@ const keyServices = computed(() => {
   pointer-events: none;
 }
 
-/* Semi-transparent country flag background */
-.card-flag-bg {
+/* Semi-transparent country flag background covering right half */
+.card-flag-container {
   position: absolute;
-  right: -10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 120px;
-  line-height: 1;
-  opacity: 0.06;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 58%;
+  overflow: hidden;
   pointer-events: none;
-  user-select: none;
-  font-family: 'Fira Code', monospace;
-  font-weight: 900;
-  color: #fff;
-  letter-spacing: -5px;
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+  mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.4) 30%, rgba(0, 0, 0, 0.9) 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.4) 30%, rgba(0, 0, 0, 0.9) 100%);
+  opacity: 0.22;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.card-flag-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.3) contrast(1.15);
+  transform: scale(1.08);
+}
+
+.card-flag-emoji {
+  font-size: 130px;
+  line-height: 1;
+  transform: translateX(15px);
+  filter: saturate(1.3);
 }
 
 .card-border-glow {
