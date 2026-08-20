@@ -2,7 +2,8 @@
 import { ref, computed } from 'vue'
 import type { Node, UnlockInfo } from '../types'
 import MetalBadge from './MetalBadge.vue'
-import { Shield, ShieldAlert, Cpu, Radio, Zap, ArrowUpRight } from 'lucide-vue-next'
+import { Shield, ShieldAlert, Cpu, Radio, Zap, ArrowUpRight } from '@lucide/vue'
+
 
 const props = withDefaults(
   defineProps<{

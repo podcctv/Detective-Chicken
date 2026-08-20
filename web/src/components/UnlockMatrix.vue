@@ -18,7 +18,8 @@ import {
   Tv,
   XCircle,
   Zap,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
+
 import type { Node, ServiceCategory, ServiceStat, UnlockInfo } from '../types'
 import MetalBadge from './MetalBadge.vue'
 

@@ -18,7 +18,8 @@ import {
   Tv,
   X,
   Zap,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
+
 import CreditCardNode from './CreditCardNode.vue'
 import MetalBadge from './MetalBadge.vue'
 import Globe3D from './Globe3D.vue'
