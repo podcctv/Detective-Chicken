@@ -1056,6 +1056,19 @@ onBeforeUnmount(() => {
               <span>上次全扫描</span>
               <span style="font-size: 12px; font-weight: 600; color: var(--text);">{{ relative(selected.last_scan) }}</span>
             </div>
+            <div>
+              <span>⏱ 检测周期</span>
+              <select
+                :value="selected.scan_interval_minutes || 360"
+                style="padding: 2px 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 11px; font-weight: 600; cursor: pointer;"
+                @change="(e) => updateScanInterval(selected!, Number((e.target as HTMLSelectElement).value))"
+              >
+                <option :value="60">每小时</option>
+                <option :value="360">每 6h</option>
+                <option :value="720">每 12h</option>
+                <option :value="1440">每天</option>
+              </select>
+            </div>
           </div>
 
           <!-- Tab 1: Overview & Threat -->
@@ -1510,6 +1523,74 @@ onBeforeUnmount(() => {
             <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
               <button type="button" class="secondary-btn" @click="passwordOpen = false">取消</button>
               <button type="submit" class="primary-btn">确认修改</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </Transition>
+
+    <!-- Login / Register Modal -->
+    <Transition name="modal">
+      <div v-if="loginOpen" class="modal-backdrop" @click.self="loginOpen = false">
+        <section class="modal" role="dialog" aria-modal="true" style="width: min(440px, 100%);">
+          <div class="modal-head">
+            <div>
+              <h2>{{ resetToken ? '重置密码' : (authMode === 'register' ? '注册新账户' : '登录控制台') }}</h2>
+              <p>{{ resetToken ? '请输入新密码完成重置' : (authMode === 'register' ? '创建管理员账户以启用完整功能' : '使用已注册账户登录') }}</p>
+            </div>
+            <button class="icon-btn" aria-label="关闭" @click="loginOpen = false">
+              <X :size="18" />
+            </button>
+          </div>
+
+          <!-- Password Reset Mode -->
+          <form v-if="resetToken" @submit.prevent="completeReset" style="padding: 16px 20px;">
+            <label>
+              新密码 (至少 8 位)
+              <input v-model="resetPassword" type="password" minlength="8" required placeholder="请输入新密码" />
+            </label>
+            <div v-if="authError" style="padding: 8px 12px; background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444; border-radius: 4px; font-size: 11.5px; color: #ef4444; margin-top: 10px;">
+              {{ authError }}
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+              <button type="button" class="secondary-btn" @click="loginOpen = false; resetToken = ''">取消</button>
+              <button type="submit" class="primary-btn" :disabled="authBusy">
+                {{ authBusy ? '处理中...' : '确认重置' }}
+              </button>
+            </div>
+          </form>
+
+          <!-- Login / Register Mode -->
+          <form v-else @submit.prevent="submitAuth" style="padding: 16px 20px;">
+            <label v-if="authMode === 'register'">
+              显示名称
+              <input v-model="authForm.display_name" required placeholder="例如 管理员" />
+            </label>
+            <label>
+              用户名
+              <input v-model="authForm.username" required placeholder="请输入用户名" autocomplete="username" />
+            </label>
+            <label>
+              密码
+              <input v-model="authForm.password" type="password" required placeholder="请输入密码" :minlength="authMode === 'register' ? 8 : 1" autocomplete="current-password" />
+            </label>
+            <div v-if="authError" style="padding: 8px 12px; background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444; border-radius: 4px; font-size: 11.5px; color: #ef4444; margin-top: 10px;">
+              {{ authError }}
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+              <button
+                v-if="auth?.settings?.registration_enabled || !auth?.settings?.bootstrapped"
+                type="button"
+                class="secondary-btn"
+                style="font-size: 11px;"
+                @click="authMode = authMode === 'login' ? 'register' : 'login'; authError = ''"
+              >
+                {{ authMode === 'login' ? '没有账户？注册' : '已有账户？登录' }}
+              </button>
+              <span v-else></span>
+              <button type="submit" class="primary-btn" :disabled="authBusy">
+                {{ authBusy ? '处理中...' : (authMode === 'register' ? '注册并登录' : '登 录') }}
+              </button>
             </div>
           </form>
         </section>

@@ -22,27 +22,9 @@ const emit = defineEmits<{
   (e: 'inspectService', payload: { node: Node; serviceId: string }): void
 }>()
 
-// 3D Parallax Tilt state
+// Hover state (no 3D tilt, just subtle lift)
 const cardRef = ref<HTMLElement | null>(null)
-const rotX = ref(0)
-const rotY = ref(0)
-const glareX = ref(50)
-const glareY = ref(50)
 const isHovering = ref(false)
-
-const onMouseMove = (e: MouseEvent) => {
-  if (!props.interactive || !cardRef.value) return
-  const rect = cardRef.value.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
-  const centerX = rect.width / 2
-  const centerY = rect.height / 2
-
-  rotX.value = -((y - centerY) / centerY) * 12
-  rotY.value = ((x - centerX) / centerX) * 14
-  glareX.value = (x / rect.width) * 100
-  glareY.value = (y / rect.height) * 100
-}
 
 const onMouseEnter = () => {
   isHovering.value = true
@@ -50,10 +32,6 @@ const onMouseEnter = () => {
 
 const onMouseLeave = () => {
   isHovering.value = false
-  rotX.value = 0
-  rotY.value = 0
-  glareX.value = 50
-  glareY.value = 50
 }
 
 // Risk Level and Style
@@ -88,26 +66,18 @@ const keyServices = computed(() => {
     ref="cardRef"
     class="credit-card-wrap"
     :class="{ 'is-selected': selected }"
-    @mousemove="onMouseMove"
     @mouseenter="onMouseEnter"
     @mouseleave="onMouseLeave"
     @click="emit('select', node)"
   >
     <div
       class="metal-credit-card"
-      :style="{
-        transform: `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) ${isHovering ? 'scale3d(1.02, 1.02, 1.02)' : 'scale3d(1, 1, 1)'}`,
-      }"
+      :class="{ hovering: isHovering }"
     >
-      <!-- Metallic Foil, Brushed Shading & Glare Reflection -->
+      <!-- Metallic Foil, Brushed Shading -->
       <div class="card-metal-sheen"></div>
-      <div
-        class="card-dynamic-glare"
-        :style="{
-          background: `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 40%, transparent 75%)`,
-          opacity: isHovering ? 1 : 0.2,
-        }"
-      ></div>
+      <!-- Semi-transparent country flag background -->
+      <div class="card-flag-bg" aria-hidden="true">{{ node.country_code || node.region || '🌐' }}</div>
       <div class="card-border-glow"></div>
 
       <!-- Top Header Row: EMV Microchip, Provider, Region Pill -->
@@ -215,10 +185,19 @@ const keyServices = computed(() => {
     inset 0 1px 1px rgba(255, 255, 255, 0.25),
     inset 0 -1px 2px rgba(0, 0, 0, 0.8);
   overflow: hidden;
-  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.metal-credit-card.hovering {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.7),
+    0 8px 16px rgba(0, 0, 0, 0.5),
+    inset 0 1px 2px rgba(255, 255, 255, 0.3),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .is-selected .metal-credit-card {
@@ -245,12 +224,21 @@ const keyServices = computed(() => {
   pointer-events: none;
 }
 
-.card-dynamic-glare {
+/* Semi-transparent country flag background */
+.card-flag-bg {
   position: absolute;
-  inset: 0;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 120px;
+  line-height: 1;
+  opacity: 0.06;
   pointer-events: none;
-  mix-blend-mode: overlay;
-  transition: opacity 0.25s ease;
+  user-select: none;
+  font-family: 'Fira Code', monospace;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -5px;
 }
 
 .card-border-glow {
@@ -388,19 +376,20 @@ const keyServices = computed(() => {
   color: #f8fafc;
 }
 
-/* Card Identity (Raised Embossed Text) */
+/* Card Identity (Raised Embossed Text with premium typography) */
 .card-identity-block {
   margin: 4px 0;
 }
 .node-embossed-name {
   font-family: 'Outfit', sans-serif;
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 800;
   color: #f8fafc;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.8),
-    0 -1px 0 rgba(255, 255, 255, 0.2);
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 -1px 0 rgba(255, 255, 255, 0.15);
 }
 .node-embossed-ip {
   display: flex;
@@ -410,11 +399,11 @@ const keyServices = computed(() => {
 }
 .ip-digits {
   font-family: 'Fira Code', monospace;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #cbd5e1;
-  letter-spacing: 1.2px;
-  text-shadow: 0 1px 1px #000;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 2px;
+  text-shadow: 0 1px 2px #000;
 }
 .ip-family-badge {
   font-size: 9px;
@@ -512,5 +501,6 @@ const keyServices = computed(() => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  overflow: hidden;
 }
 </style>

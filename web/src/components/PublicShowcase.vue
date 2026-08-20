@@ -24,7 +24,6 @@ import {
 
 import CreditCardNode from './CreditCardNode.vue'
 import MetalBadge from './MetalBadge.vue'
-import UnlockMatrix from './UnlockMatrix.vue'
 import type { Dashboard, Node } from '../types'
 
 const props = defineProps<{
@@ -36,8 +35,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ login: []; refresh: []; theme: [] }>()
 
-// Default to 'matrix' as requested: 默认显示 AI / 流媒体 全景矩阵
-const publicView = ref<'matrix' | 'cards' | 'ranking'>('matrix')
+// 未登录状态只展示卡片视图
+const publicView = ref<'cards'>('cards')
 const selectedNode = ref<Node | null>(null)
 const inspectNode = ref<Node | null>(null)
 const activeRegionFilter = ref<string>('all')
@@ -119,36 +118,7 @@ const copyReinstallScript = (node: Node) => {
         </div>
       </div>
 
-      <!-- Segmented Metallic View Tabs -->
-      <div class="public-nav-tabs" role="tablist" aria-label="视图模式切换">
-        <button
-          class="public-tab"
-          :class="{ active: publicView === 'matrix' }"
-          role="tab"
-          @click="publicView = 'matrix'"
-        >
-          <Layers :size="15" />
-          <span>AI / 流媒体 全景矩阵</span>
-        </button>
-        <button
-          class="public-tab"
-          :class="{ active: publicView === 'cards' }"
-          role="tab"
-          @click="publicView = 'cards'"
-        >
-          <CreditCard :size="15" />
-          <span>金属卡片展厅</span>
-        </button>
-        <button
-          class="public-tab"
-          :class="{ active: publicView === 'ranking' }"
-          role="tab"
-          @click="publicView = 'ranking'"
-        >
-          <Trophy :size="15" />
-          <span>综合战力天梯榜</span>
-        </button>
-      </div>
+      <!-- 未登录状态不展示视图切换 tabs -->
 
       <!-- Top Action Bar -->
       <div class="public-actions">
@@ -238,18 +208,8 @@ const copyReinstallScript = (node: Node) => {
 
       <div v-if="loading" class="loading-line public-loading"></div>
 
-      <!-- VIEW 1: Full 20+ Brand Unlock Matrix (默认第一展示页) -->
-      <section v-if="publicView === 'matrix'" class="public-matrix-view">
-        <UnlockMatrix
-          :nodes="data.nodes"
-          :services="data.services"
-          :selected-node-id="selectedNode?.id"
-          @select-node="(n) => { selectedNode = n; inspectNode = n }"
-        />
-      </section>
-
-      <!-- VIEW 2: Credit Card Fleet Gallery (金属卡片展厅) -->
-      <section v-else-if="publicView === 'cards'" class="public-cards-view">
+      <!-- 金属卡片展厅 (未登录唯一视图) -->
+      <section class="public-cards-view">
         <div class="fleet-toolbar">
           <div class="region-filter-chips">
             <button
@@ -271,7 +231,7 @@ const copyReinstallScript = (node: Node) => {
           </div>
 
           <div class="fleet-meta-hint">
-            <span>💳 鼠标悬浮体验 3D 陀螺仪视差与全息反光</span>
+            <span>💳 点击卡片查看完整 AI 与流媒体解锁详情</span>
           </div>
         </div>
 
@@ -293,68 +253,7 @@ const copyReinstallScript = (node: Node) => {
         </div>
       </section>
 
-      <!-- VIEW 3: Power Rankings Leaderboard (天梯榜) -->
-      <section v-else-if="publicView === 'ranking'" class="public-ranking-view">
-        <div class="ranking-split-grid">
-          <div class="metal-panel">
-            <div class="panel-head-metallic">
-              <Trophy :size="18" class="text-gold" />
-              <div>
-                <h2>小鸡综合战力天梯榜</h2>
-                <small>基于 IP 纯净度、AI/流媒体全项真实验证及网络延迟综合评定</small>
-              </div>
-            </div>
 
-            <div v-if="data.rankings && data.rankings.length" class="metal-ranking-table">
-              <div
-                v-for="item in data.rankings"
-                :key="item.node_id"
-                class="ranking-row"
-                :class="{ 'podium-gold': item.rank === 1, 'podium-silver': item.rank === 2, 'podium-bronze': item.rank === 3 }"
-                @click="onSelectNode(data.nodes.find((n) => n.id === item.node_id) || data.nodes[0])"
-              >
-                <div class="rank-badge-wrap">
-                  <span class="rank-pos">{{ item.rank }}</span>
-                </div>
-                <div class="rank-node-info">
-                  <strong>{{ item.name }}</strong>
-                  <small>{{ item.provider || 'VPS' }} · {{ item.region || 'GL' }}</small>
-                </div>
-                <div class="rank-services-count">
-                  <span>{{ item.unlocks }} 项核心畅通</span>
-                </div>
-                <div class="rank-score-capsule" :class="qualityClass(item.risk)">
-                  <span>{{ item.quality }} 分</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="metal-panel">
-            <div class="panel-head-metallic">
-              <Zap :size="18" class="text-sky" />
-              <div>
-                <h2>天梯榜量化算法与口径</h2>
-                <small>Go 原生毫秒级握手 + 权威数据库严谨核验</small>
-              </div>
-            </div>
-            <div class="criteria-list">
-              <div class="criteria-item">
-                <strong>IP 纯净度评分 (40%)</strong>
-                <p>实时调用 Scamalytics、AbuseIPDB 与 IPQS，阻断高欺诈机房 IP。</p>
-              </div>
-              <div class="criteria-item">
-                <strong>AI 生产力大模型解锁 (30%)</strong>
-                <p>ChatGPT、Claude 3.5、Gemini、DeepSeek 等 10 款 AI 平台免验证直连。</p>
-              </div>
-              <div class="criteria-item">
-                <strong>流媒体原生 4K/HDR (30%)</strong>
-                <p>Netflix 原生非自制全库、Disney+、YouTube Premium、Spotify 音质畅通。</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
 
     <!-- Node Diagnostic & Reinstall Inspection Modal -->

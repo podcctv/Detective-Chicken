@@ -849,6 +849,7 @@ const hideCellTooltip = () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  overflow: hidden;
 }
 
 /* Hover Popover */

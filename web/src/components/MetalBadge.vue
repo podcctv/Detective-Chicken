@@ -246,8 +246,8 @@ const statusLabel = computed(() => {
   box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
 }
 .status-available .brand-logo-wrap {
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  border: none;
   filter: none;
 }
 .status-available .status-gem {
@@ -264,8 +264,8 @@ const statusLabel = computed(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .status-limited .brand-logo-wrap {
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  border: none;
 }
 .status-limited .status-gem {
   background: #f59e0b;
@@ -279,8 +279,8 @@ const statusLabel = computed(() => {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
 }
 .status-blocked .brand-logo-wrap {
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
   filter: grayscale(100%) opacity(0.55);
 }
 .status-blocked .status-gem {
