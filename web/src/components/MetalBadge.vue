@@ -49,6 +49,11 @@ const statusLabel = computed(() => {
       return '未测'
   }
 })
+
+const isYouTubeCN = computed(() =>
+  props.serviceId === 'youtube' &&
+  (props.region?.toUpperCase() === 'CN' || props.quality?.includes('送中')),
+)
 </script>
 
 <template>
@@ -57,9 +62,9 @@ const statusLabel = computed(() => {
     :class="[
       `badge-${size}`,
       `status-${statusNormalized}`,
-      { 'is-interactive': interactive },
+      { 'is-interactive': interactive, 'has-cn-route': isYouTubeCN },
     ]"
-    :title="`${name || serviceId}: ${statusLabel} ${region ? `(${region})` : ''} ${latencyMs ? `· ${latencyMs}ms` : ''}`"
+    :title="`${name || serviceId}: ${quality || statusLabel} ${region ? `(${region})` : ''} ${latencyMs ? `· ${latencyMs}ms` : ''}`"
     @click="interactive && emit('click', serviceId)"
   >
     <!-- Metallic Beveled Rim Background -->
@@ -191,6 +196,7 @@ const statusLabel = computed(() => {
       <div v-else class="brand-generic-char">
         {{ (name || serviceId).slice(0, 2).toUpperCase() }}
       </div>
+      <span v-if="isYouTubeCN" class="compact-cn-tag">送中</span>
     </div>
 
     <!-- Metadata / Status Capsule -->
@@ -230,6 +236,9 @@ const statusLabel = computed(() => {
     0 8px 20px rgba(0, 0, 0, 0.6),
     0 0 12px rgba(56, 189, 248, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.metal-badge.has-cn-route {
+  overflow: visible;
 }
 
 /* Status 1: Available (彩色高亮) */
@@ -327,6 +336,7 @@ const statusLabel = computed(() => {
 
 /* Brand Logo Container */
 .brand-logo-wrap {
+  position: relative;
   width: 26px;
   height: 26px;
   border-radius: 6px;
@@ -335,6 +345,21 @@ const statusLabel = computed(() => {
   flex-shrink: 0;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
   transition: all 0.2s ease;
+}
+.compact-cn-tag {
+  position: absolute;
+  right: -7px;
+  bottom: -6px;
+  z-index: 3;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: #f59e0b;
+  color: #111827;
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 12px;
+  white-space: nowrap;
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.75);
 }
 .brand-svg {
   width: 17px;

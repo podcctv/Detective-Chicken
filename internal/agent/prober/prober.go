@@ -3,10 +3,13 @@ package prober
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -26,10 +29,16 @@ type ProbeResult struct {
 }
 
 type NetworkIdentity struct {
-	IP          string
-	IsWARP      bool
-	CountryCode string
-	Colo        string
+	IP           string
+	IsWARP       bool
+	CountryCode  string
+	Colo         string
+	ASN          int64
+	Organization string
+	UsageType    string
+	City         string
+	Latitude     float64
+	Longitude    float64
 }
 
 // Prober performs native concurrent probes on target media and AI endpoints.
@@ -47,9 +56,10 @@ func NewProber(family int, timeout time.Duration) *Prober {
 
 func (p *Prober) ProbeNetworkIdentity(ctx context.Context) NetworkIdentity {
 	client := p.getHTTPClient()
+	var ident NetworkIdentity
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.cloudflare.com/cdn-cgi/trace", nil)
 	if err != nil {
-		return NetworkIdentity{}
+		return ident
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 	resp, err := client.Do(req)
@@ -65,36 +75,97 @@ func (p *Prober) ProbeNetworkIdentity(ctx context.Context) NetworkIdentity {
 			if resp2, err3 := client.Do(req2); err3 == nil {
 				defer resp2.Body.Close()
 				body, _ := io.ReadAll(io.LimitReader(resp2.Body, 128))
-				return NetworkIdentity{IP: strings.TrimSpace(string(body))}
+				ident.IP = strings.TrimSpace(string(body))
 			}
 		}
-		return NetworkIdentity{}
+	} else {
+		defer resp.Body.Close()
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		for _, line := range strings.Split(string(bodyBytes), "\n") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			k := strings.TrimSpace(parts[0])
+			v := strings.TrimSpace(parts[1])
+			switch k {
+			case "ip":
+				ident.IP = v
+			case "warp":
+				ident.IsWARP = v == "on" || v == "plus"
+			case "loc":
+				ident.CountryCode = v
+			case "colo":
+				ident.Colo = v
+			}
+		}
+	}
+	p.enrichNetworkIdentity(ctx, client, &ident)
+	return ident
+}
+
+// enrichNetworkIdentity is an independent fallback for the fields most visible
+// on the public card. IP.Check.Place already consults ipapi.is; querying the
+// same public dataset directly prevents a partial upstream run from silently
+// turning a known ASN or line type into zero/default UI values.
+func (p *Prober) enrichNetworkIdentity(ctx context.Context, client *http.Client, ident *NetworkIdentity) {
+	if ident == nil || net.ParseIP(ident.IP) == nil {
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.ipapi.is/?q="+url.QueryEscape(ident.IP), nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Origin", "https://ipapi.is")
+	req.Header.Set("User-Agent", "Detective-Chicken/native-prober")
+	resp, err := client.Do(req)
+	if err != nil {
+		return
 	}
 	defer resp.Body.Close()
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-	lines := strings.Split(string(bodyBytes), "\n")
-	var ident NetworkIdentity
-	for _, line := range lines {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		k := strings.TrimSpace(parts[0])
-		v := strings.TrimSpace(parts[1])
-		switch k {
-		case "ip":
-			ident.IP = v
-		case "warp":
-			if v == "on" || v == "plus" {
-				ident.IsWARP = true
-			}
-		case "loc":
-			ident.CountryCode = v
-		case "colo":
-			ident.Colo = v
-		}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return
 	}
-	return ident
+	var payload struct {
+		IsDatacenter bool `json:"is_datacenter"`
+		ASN          struct {
+			Number int64  `json:"asn"`
+			Org    string `json:"org"`
+			Type   string `json:"type"`
+		} `json:"asn"`
+		Company struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"company"`
+		Location struct {
+			CountryCode string  `json:"country_code"`
+			City        string  `json:"city"`
+			Latitude    float64 `json:"latitude"`
+			Longitude   float64 `json:"longitude"`
+		} `json:"location"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&payload); err != nil {
+		return
+	}
+	ident.ASN = payload.ASN.Number
+	ident.Organization = strings.TrimSpace(payload.ASN.Org)
+	if ident.Organization == "" {
+		ident.Organization = strings.TrimSpace(payload.Company.Name)
+	}
+	ident.UsageType = strings.TrimSpace(payload.ASN.Type)
+	if ident.UsageType == "" {
+		ident.UsageType = strings.TrimSpace(payload.Company.Type)
+	}
+	if payload.IsDatacenter {
+		ident.UsageType = "hosting"
+	}
+	if ident.CountryCode == "" {
+		ident.CountryCode = strings.ToUpper(strings.TrimSpace(payload.Location.CountryCode))
+	}
+	ident.City = strings.TrimSpace(payload.Location.City)
+	ident.Latitude = payload.Location.Latitude
+	ident.Longitude = payload.Location.Longitude
 }
 
 func (p *Prober) getHTTPClient() *http.Client {
@@ -436,21 +507,39 @@ func (p *Prober) probeDisneyPlus(ctx context.Context, client *http.Client) Probe
 	return ProbeResult{ID: "disney", Name: "Disney+", Category: "streaming", Status: "blocked", Quality: "区域限制", Latency: latency, Detail: fmt.Sprintf("HTTP %d", resp.StatusCode)}
 }
 
+var youtubeRegionPattern = regexp.MustCompile(`(?i)"contentRegion"\s*:\s*"([A-Z]{2})"`)
+
 func (p *Prober) probeYouTube(ctx context.Context, client *http.Client) ProbeResult {
 	start := time.Now()
 	req, _ := http.NewRequestWithContext(ctx, "GET", "https://www.youtube.com/premium", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Cookie", "CONSENT=YES+cb.20220301-11-p0.en+FX+700; PREF=hl=en")
 
 	resp, err := client.Do(req)
 	latency := int(time.Since(start).Milliseconds())
 
 	if err != nil {
-		return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "blocked", Quality: "无法访问", Latency: latency, Detail: "YouTube 节点超时"}
+		return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "unknown", Quality: "检测失败", Latency: latency, Detail: "YouTube 探测超时，不能据此判定为封锁"}
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == 200 || resp.StatusCode == 302 {
-		return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "available", Quality: "Premium 原生解锁", Latency: latency, Detail: "后台播放与免广告支持"}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	html := string(body)
+	region := ""
+	if match := youtubeRegionPattern.FindStringSubmatch(html); len(match) == 2 {
+		region = strings.ToUpper(match[1])
+	}
+	if strings.Contains(strings.ToLower(html), "www.google.cn") || region == "CN" {
+		return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "limited", Region: "CN", Quality: "送中（中国区）", Latency: latency, Detail: "YouTube 可达，但内容地区被识别为中国大陆"}
+	}
+	if strings.Contains(html, "Premium is not available in your country") {
+		return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "blocked", Region: region, Quality: "Premium 当前地区不可用", Latency: latency, Detail: "YouTube Premium 区域限制"}
+	}
+	if (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusFound) && strings.Contains(strings.ToLower(html), "ad-free") {
+		return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "available", Region: region, Quality: "Premium 原生解锁", Latency: latency, Detail: "页面确认提供免广告 Premium 服务"}
+	}
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusFound {
+		return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "limited", Region: region, Quality: "结果待确认", Latency: latency, Detail: "YouTube 可访问，但页面未返回可靠的 Premium 地区标记"}
 	}
 	return ProbeResult{ID: "youtube", Name: "YouTube Prem", Category: "streaming", Status: "limited", Quality: "区域限制", Latency: latency, Detail: fmt.Sprintf("HTTP %d", resp.StatusCode)}
 }

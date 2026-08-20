@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/podcctv/detective-chicken/internal/model"
 )
@@ -92,48 +93,55 @@ func (m *Memory) restoreNodeOwners(owners map[string]string) {
 }
 
 func (m *Memory) restoreReportedIPs() {
-	latest := make(map[string]model.Report)
+	latest := make(map[string]map[int]model.Report)
 	for _, report := range m.reports {
-		node, ok := m.nodes[report.NodeID]
-		if !ok || report.Network.ReportedIP == "" {
+		if _, ok := m.nodes[report.NodeID]; !ok {
 			continue
 		}
-		if node.Family != 0 && report.Network.Family != node.Family {
-			continue
+		if latest[report.NodeID] == nil {
+			latest[report.NodeID] = make(map[int]model.Report)
 		}
-		current, ok := latest[report.NodeID]
+		current, ok := latest[report.NodeID][report.Network.Family]
 		if !ok || report.CollectedAt.After(current.CollectedAt) {
-			latest[report.NodeID] = report
+			latest[report.NodeID][report.Network.Family] = report
 		}
 	}
-	for nodeID, report := range latest {
+	for nodeID, reports := range latest {
 		node := m.nodes[nodeID]
-		node.ReportedIP = report.Network.ReportedIP
-		node.MaskedIP = MaskIP(report.Network.ReportedIP)
-		if report.Quality.ASN != 0 {
-			node.ASN = report.Quality.ASN
+		node.Families = nil
+		node.MaskedIPv4 = ""
+		node.MaskedIPv6 = ""
+		node.Warp4 = false
+		node.Warp6 = false
+		for _, family := range []int{4, 6} {
+			report, ok := reports[family]
+			if !ok || !validReportedIP(report.Network.ReportedIP, family) {
+				continue
+			}
+			node.Families = append(node.Families, family)
+			if family == 4 {
+				node.MaskedIPv4 = MaskIP(report.Network.ReportedIP)
+				node.Warp4 = reportIsWARP(report)
+			} else {
+				node.MaskedIPv6 = MaskIP(report.Network.ReportedIP)
+				node.Warp6 = reportIsWARP(report)
+			}
 		}
-		if report.Quality.Organization != "" {
-			node.Organization = report.Quality.Organization
+		node.IsWarp = node.Warp4 || node.Warp6
+
+		primary, ok := reports[4]
+		if !ok || !validReportedIP(primary.Network.ReportedIP, 4) {
+			primary, ok = reports[6]
 		}
-		if report.Quality.CountryCode != "" {
-			node.CountryCode = report.Quality.CountryCode
+		if ok && validReportedIP(primary.Network.ReportedIP, primary.Network.Family) {
+			node.Family = primary.Network.Family
+			node.ReportedIP = primary.Network.ReportedIP
+			node.MaskedIP = MaskIP(primary.Network.ReportedIP)
+			applyReportIdentity(&node, primary)
 		}
-		if report.Quality.Latitude != 0 {
-			node.Latitude = report.Quality.Latitude
-		}
-		if report.Quality.Longitude != 0 {
-			node.Longitude = report.Quality.Longitude
-		}
-		node.Risk = computeRisk(report.Quality.Scores)
-		node.Netflix = mediaStatus(report.Quality.Media, "netflix")
-		node.ChatGPT = mediaStatus(report.Quality.Media, "chatgpt")
-		node.Unlocks = parseNodeUnlocks(report.Quality.Media, node.CountryCode)
-		node.DNSBL = dnsblCount(report.Quality.Mail)
 		m.nodes[nodeID] = node
 	}
 }
-
 
 func nonNil[K comparable, V any](value map[K]V) map[K]V {
 	if value == nil {
@@ -176,5 +184,25 @@ func (m *Memory) writeStateLocked() error {
 	if err := os.WriteFile(tmp, raw, 0600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, m.dataPath)
+	return replaceStateFile(tmp, m.dataPath)
+}
+
+func replaceStateFile(tmp, target string) error {
+	if runtime.GOOS != "windows" {
+		return os.Rename(tmp, target)
+	}
+	backup := target + ".bak"
+	_ = os.Remove(backup)
+	if err := os.Rename(target, backup); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return os.Rename(tmp, target)
+		}
+		return err
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		_ = os.Rename(backup, target)
+		return err
+	}
+	_ = os.Remove(backup)
+	return nil
 }

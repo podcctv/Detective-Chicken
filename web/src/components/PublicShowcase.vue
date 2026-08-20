@@ -91,6 +91,24 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
   selectedNode.value = node
   inspectNode.value = node
 }
+
+const detectedUsage = (node: Node) => node.usage_type || '待检测'
+const detectedIPType = (node: Node) => node.ip_type || '待检测'
+const detectedASN = (node: Node) => node.asn > 0 ? `AS${node.asn}` : 'ASN 待检测'
+const detectedOrganization = (node: Node) => node.organization || '归属组织待检测'
+const maskedAddresses = (node: Node) => {
+  const addresses = [node.masked_ipv4, node.masked_ipv6].filter(Boolean)
+  return addresses.length ? addresses.join(' · ') : (node.masked_ip || 'IP 待检测')
+}
+const protocolLabel = (node: Node) => {
+  const families = (node.families?.length ? node.families : [node.family]).filter(
+    (family) => family === 4 || family === 6,
+  )
+  const labels: string[] = []
+  if (families.includes(4)) labels.push(node.warp4 || (node.is_warp && !node.warp6) ? 'IPv4(WARP)' : 'IPv4')
+  if (families.includes(6)) labels.push(node.warp6 || (node.is_warp && !node.warp4 && !families.includes(4)) ? 'IPv6(WARP)' : 'IPv6')
+  return labels.length ? labels.join(' + ') : '协议待检测'
+}
 </script>
 
 <template>
@@ -195,13 +213,13 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
           <div class="modal-foil"></div>
           <header class="modal-head">
             <div class="modal-title-wrap">
-              <span class="modal-flag">{{ inspectNode.country_code || inspectNode.region }}-{{ inspectNode.usage_type || '机房' }}</span>
+              <span class="modal-flag">{{ inspectNode.country_code || inspectNode.region || '未知地区' }}-{{ detectedUsage(inspectNode) }}</span>
               <div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <h3>{{ inspectNode.name }}</h3>
                   <span class="card-back-tag">卡片背面 · 深度研判报告</span>
                 </div>
-                <small>{{ inspectNode.provider }} · {{ inspectNode.organization || 'Direct Carrier' }} · AS{{ inspectNode.asn }}</small>
+                <small>{{ inspectNode.provider }} · {{ detectedOrganization(inspectNode) }} · {{ detectedASN(inspectNode) }}</small>
               </div>
             </div>
             <div class="head-actions">
@@ -226,7 +244,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
               </div>
               <div>
                 <span>属性 / 宽带类型</span>
-                <strong style="color: #38bdf8;">{{ inspectNode.ip_type || '原生' }} · {{ inspectNode.usage_type || '数据机房' }}</strong>
+                <strong style="color: #38bdf8;">{{ detectedIPType(inspectNode) }} · {{ detectedUsage(inspectNode) }}</strong>
               </div>
               <div>
                 <span>DNSBL 邮件信誉</span>
@@ -240,20 +258,17 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
             <div class="network-hud-bar">
               <div class="hud-item">
                 <span class="hud-label">公网脱敏 IP</span>
-                <code v-if="inspectNode.masked_ipv4 && inspectNode.masked_ipv6" class="modal-ip">
-                  {{ inspectNode.masked_ipv4 }} · {{ inspectNode.masked_ipv6 }}
-                </code>
-                <code v-else class="modal-ip">{{ inspectNode.masked_ip }}</code>
+                <code class="modal-ip">{{ maskedAddresses(inspectNode) }}</code>
               </div>
               <div class="hud-item">
                 <span class="hud-label">协议栈 & WARP</span>
-                <span class="hud-val" :style="{ color: inspectNode.is_warp ? '#f59e0b' : '#38bdf8' }">
-                  {{ inspectNode.is_warp ? ((inspectNode.families?.length ?? 1) > 1 ? 'IPv4(WARP) + IPv6' : 'WARP 双栈') : ((inspectNode.families?.length ? inspectNode.families : [inspectNode.family || 4]).map((f) => `IPv${f}`).join(' + ')) }}
+                <span class="hud-val" :style="{ color: (inspectNode.is_warp || inspectNode.warp4 || inspectNode.warp6) ? '#f59e0b' : '#38bdf8' }">
+                  {{ protocolLabel(inspectNode) }}
                 </span>
               </div>
               <div class="hud-item">
                 <span class="hud-label">自治系统 ASN</span>
-                <span class="hud-val">AS{{ inspectNode.asn }} ({{ inspectNode.organization }})</span>
+                <span class="hud-val">{{ detectedASN(inspectNode) }} ({{ detectedOrganization(inspectNode) }})</span>
               </div>
               <div class="hud-item">
                 <span class="hud-label">地区归属</span>

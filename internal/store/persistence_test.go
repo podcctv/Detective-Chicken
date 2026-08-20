@@ -84,6 +84,73 @@ func TestPersistentStoreRestoresPrivateIPFromLatestReport(t *testing.T) {
 	}
 }
 
+func TestPersistentStoreRestoresAccuratePublicCardIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	st, err := NewPersistent(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrollment := st.CreateEnrollment("tenant", "owner", "Dual Stack", "Provider", "HK", "auto", "lxc", "amd64", 360)
+	node, agentKey, err := st.Register(enrollment.Token, make([]byte, ed25519.PublicKeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	v4 := model.Report{
+		ReportID: "report-identity-v4", NodeID: node.ID, AgentID: agentKey.AgentID, CollectedAt: now,
+		Network: model.Network{Family: 4, ReportedIP: "154.94.1.8"},
+		Quality: model.Quality{
+			ASN: 139646, Organization: "JINX CO., LIMITED", CountryCode: "HK", UsageType: "Fixed Line ISP", IPType: "广播IP",
+			Media: map[string]any{"Youtube": map[string]any{"Status": "中国", "Region": "CN"}},
+		},
+	}
+	v6 := model.Report{
+		ReportID: "report-identity-v6", NodeID: node.ID, AgentID: agentKey.AgentID, CollectedAt: now.Add(time.Second),
+		Network: model.Network{Family: 6, ReportedIP: "2001:db8::8", IsWARP: true},
+		Quality: model.Quality{ASN: 13335, Organization: "Cloudflare, Inc."},
+	}
+	if err := st.SaveReport(v4); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveReport(v6); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := NewPersistent(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public := reloaded.PublicDashboard()
+	if len(public.Nodes) != 1 {
+		t.Fatalf("public nodes = %#v", public.Nodes)
+	}
+	got := public.Nodes[0]
+	if got.ASN != 139646 || got.Organization != "JINX CO., LIMITED" || got.UsageType != "家宽" || got.IPType != "广播" {
+		t.Fatalf("identity fields were not restored: %#v", got)
+	}
+	if got.MaskedIPv4 == "" || got.MaskedIPv6 == "" || len(got.Families) != 2 || got.Warp4 || !got.Warp6 || !got.IsWarp {
+		t.Fatalf("dual-stack/WARP fields were not restored: %#v", got)
+	}
+	youtube, ok := got.Unlocks.Streaming["youtube"]
+	if !ok || youtube.Status != "limited" || youtube.Region != "CN" || youtube.Quality != "送中（中国区）" {
+		t.Fatalf("YouTube CN result was not restored: %#v", got.Unlocks)
+	}
+}
+
+func TestCloudflareASNAloneIsNotWARP(t *testing.T) {
+	report := model.Report{
+		Network: model.Network{Family: 4, ReportedIP: "203.0.113.8"},
+		Quality: model.Quality{ASN: 13335, Organization: "Cloudflare, Inc."},
+	}
+	if reportIsWARP(report) {
+		t.Fatal("Cloudflare ASN without an explicit WARP signal was misclassified")
+	}
+	report.Network.IsWARP = true
+	if !reportIsWARP(report) {
+		t.Fatal("explicit WARP signal was ignored")
+	}
+}
+
 func TestMaskIPLastTwoSegments(t *testing.T) {
 	cases := map[string]string{
 		"203.0.113.99":       "203.0.*.*",

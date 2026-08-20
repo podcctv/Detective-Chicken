@@ -99,14 +99,16 @@ const countryFlagEmoji = computed(() => {
 
 // Combined [HK-机房] / [HK-家宽] / [TW-商宽] badge
 const locationUsageBadge = computed(() => {
-  const loc = props.node.country_code || props.node.region || 'GL'
-  const usage = props.node.usage_type || '机房'
+  const loc = props.node.country_code || props.node.region || '未知地区'
+  const usage = props.node.usage_type || '待检测'
   return `${loc}-${usage}`
 })
 
 // Protocol & WARP display badge (e.g. [IPv4(WARP) + IPv6])
 const ipProtocolBadge = computed(() => {
-  const fams = props.node.families?.length ? props.node.families : [props.node.family || 4]
+  const fams = (props.node.families?.length ? props.node.families : [props.node.family]).filter(
+    (family): family is number => family === 4 || family === 6,
+  )
   const has4 = fams.includes(4)
   const has6 = fams.includes(6)
 
@@ -117,8 +119,26 @@ const ipProtocolBadge = computed(() => {
   } else if (has6) {
     return (props.node.warp6 || props.node.is_warp) ? 'IPv6(WARP)' : 'IPv6'
   }
-  return (props.node.warp4 || props.node.is_warp) ? 'IPv4(WARP)' : 'IPv4'
+  if (has4) return (props.node.warp4 || props.node.is_warp) ? 'IPv4(WARP)' : 'IPv4'
+  return '协议待检测'
 })
+
+const hasWarp = computed(() => Boolean(props.node.is_warp || props.node.warp4 || props.node.warp6))
+const maskedIPDisplay = computed(() => {
+  const addresses = [props.node.masked_ipv4, props.node.masked_ipv6].filter(Boolean)
+  if (addresses.length) return addresses.join(' · ')
+  return props.node.masked_ip || 'IP 待检测'
+})
+const asnDisplay = computed(() => props.node.asn > 0 ? `AS${props.node.asn}` : 'ASN 待检测')
+const organizationDisplay = computed(() => props.node.organization || '归属组织待检测')
+const ipTypeDisplay = computed(() => props.node.ip_type || '待检测')
+const statusDisplay = computed(() => ({
+  online: '在线',
+  warning: '注意',
+  alert: '告警',
+  offline: '离线',
+  pending: '待接入',
+}[props.node.status] || '未知'))
 </script>
 
 <template>
@@ -172,18 +192,16 @@ const ipProtocolBadge = computed(() => {
         <div class="node-embossed-name">{{ node.name }}</div>
         <div class="node-embossed-ip">
           <div class="ip-numbers-wrap">
-            <span v-if="node.masked_ipv4 && node.masked_ipv6" class="ip-digits dual-ip">
-              <span class="ip-v4">{{ node.masked_ipv4 }}</span>
-              <span class="ip-sep">·</span>
-              <span class="ip-v6">{{ node.masked_ipv6 }}</span>
-            </span>
-            <span v-else class="ip-digits">{{ node.masked_ip || '0.0.0.0' }}</span>
+            <span class="ip-digits" :class="{ 'dual-ip': maskedIPDisplay.includes(' · ') }">{{ maskedIPDisplay }}</span>
           </div>
-          <span class="ip-family-badge" :class="{ 'is-warp': node.is_warp }">
+          <span class="ip-family-badge" :class="{ 'is-warp': hasWarp }">
             {{ ipProtocolBadge }}
           </span>
-          <span class="ip-type-badge" :class="node.ip_type === '广播' ? 'type-broadcast' : 'type-native'">
-            {{ node.ip_type || '原生' }}
+          <span
+            class="ip-type-badge"
+            :class="node.ip_type === '广播' ? 'type-broadcast' : node.ip_type === '原生' ? 'type-native' : 'type-unknown'"
+          >
+            {{ ipTypeDisplay }}
           </span>
         </div>
       </div>
@@ -192,17 +210,17 @@ const ipProtocolBadge = computed(() => {
       <div class="card-network-row">
         <div class="meta-item">
           <span class="meta-label">AUTONOMOUS SYSTEM</span>
-          <span class="meta-val">AS{{ node.asn || '00000' }}</span>
+          <span class="meta-val">{{ asnDisplay }}</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">ORGANIZATION</span>
-          <span class="meta-val org-val" :title="node.organization">{{ node.organization || 'Direct Carrier' }}</span>
+          <span class="meta-val org-val" :title="organizationDisplay">{{ organizationDisplay }}</span>
         </div>
         <div class="meta-item right">
           <span class="meta-label">STATUS</span>
           <span class="meta-val status-val" :class="node.status">
             <span class="live-dot"></span>
-            {{ node.status === 'online' ? '在线' : node.status === 'warning' ? '注意' : '告警' }}
+            {{ statusDisplay }}
           </span>
         </div>
       </div>
@@ -503,11 +521,16 @@ const ipProtocolBadge = computed(() => {
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
+.type-unknown {
+  background: rgba(100, 116, 139, 0.14);
+  color: #94a3b8;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+}
 
 /* Network Row */
 .card-network-row {
   display: grid;
-  grid-template-columns: 1fr 1.6fr 1fr;
+  grid-template-columns: minmax(92px, 0.9fr) minmax(0, 1.7fr) minmax(70px, auto);
   gap: 8px;
   padding: 8px 10px;
   background: rgba(0, 0, 0, 0.25);
@@ -549,6 +572,8 @@ const ipProtocolBadge = computed(() => {
 .status-val.online { color: #10b981; }
 .status-val.warning { color: #f59e0b; }
 .status-val.alert { color: #ef4444; }
+.status-val.offline { color: #64748b; }
+.status-val.pending { color: #38bdf8; }
 
 .live-dot {
   width: 6px;

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -85,9 +86,16 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 			Network: model.Network{
 				Family:     family,
 				ReportedIP: identity.IP,
+				IsWARP:     identity.IsWARP,
 			},
 			Quality: model.Quality{
-				CountryCode: identity.CountryCode,
+				ASN:          identity.ASN,
+				Organization: identity.Organization,
+				CountryCode:  identity.CountryCode,
+				City:         identity.City,
+				Latitude:     identity.Latitude,
+				Longitude:    identity.Longitude,
+				UsageType:    normalizeUsageLabel(identity.UsageType),
 			},
 		}
 	} else if collectErr != nil {
@@ -98,15 +106,33 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	if report.Network.ReportedIP == "" && identity.IP != "" {
 		report.Network.ReportedIP = identity.IP
 	}
+	report.Network.IsWARP = identity.IsWARP
+	if report.Quality.ASN == 0 && identity.ASN > 0 {
+		report.Quality.ASN = identity.ASN
+	}
+	if report.Quality.Organization == "" && identity.Organization != "" {
+		report.Quality.Organization = identity.Organization
+	}
 	if report.Quality.CountryCode == "" && identity.CountryCode != "" {
 		report.Quality.CountryCode = identity.CountryCode
+	}
+	if report.Quality.City == "" && identity.City != "" {
+		report.Quality.City = identity.City
+	}
+	if report.Quality.Latitude == 0 && identity.Latitude != 0 {
+		report.Quality.Latitude = identity.Latitude
+	}
+	if report.Quality.Longitude == 0 && identity.Longitude != 0 {
+		report.Quality.Longitude = identity.Longitude
+	}
+	if report.Quality.UsageType == "" && identity.UsageType != "" {
+		report.Quality.UsageType = normalizeUsageLabel(identity.UsageType)
 	}
 	if identity.IsWARP {
 		if report.Quality.Factors == nil {
 			report.Quality.Factors = make(map[string]any)
 		}
 		report.Quality.Factors["WARP"] = true
-		report.Quality.UsageType = "WARP"
 	}
 
 	// Merge Native Prober results into report.Quality.Media
@@ -114,17 +140,7 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 		report.Quality.Media = make(map[string]any)
 	}
 	for id, res := range nativeResults {
-		report.Quality.Media[id] = map[string]any{
-			"ID":         res.ID,
-			"Name":       res.Name,
-			"Category":   res.Category,
-			"Status":     res.Status,
-			"Region":     res.Region,
-			"Quality":    res.Quality,
-			"LatencyMs":  res.Latency,
-			"Detail":     res.Detail,
-			"CheckedAt":  time.Now().UTC().Format(time.RFC3339),
-		}
+		mergeNativeMedia(report.Quality.Media, id, res)
 	}
 
 	return report, nil
@@ -141,7 +157,6 @@ func finishCollection(stdout []byte, stderr string, runErr error, family int) (m
 	return model.Report{}, parseErr
 }
 
-
 func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 	raw = stripANSI(raw)
 	raw = extractJSONObject(raw)
@@ -154,6 +169,7 @@ func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 	}
 	head := mapAt(upstream, "Head")
 	info := mapAt(upstream, "Info")
+	typeInfo := mapAt(upstream, "Type")
 	factors := mapAt(upstream, "Factor")
 	scores := rawMap(mapAt(upstream, "Score"))
 
@@ -168,6 +184,7 @@ func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 			countryCode = stringAt(reg, "Code")
 		}
 	}
+	countryCode = normalizeCountryCode(countryCode)
 	if countryCode == "" {
 		if ccMap := mapAt(factors, "CountryCode"); len(ccMap) > 0 {
 			countryCode = stringAt(ccMap, "IPinfo", "IP2LOCATION", "SCAMALYTICS", "ipapi", "DBIP")
@@ -181,21 +198,15 @@ func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 		}
 	}
 
-	usageType := stringAt(mapAt(upstream, "Type"), "UsageType", "Usage")
-	if usageType == "" {
-		if uMap := mapAt(mapAt(upstream, "Type"), "Usage"); len(uMap) > 0 {
-			usageType = stringAt(uMap, "IPinfo", "ipregistry", "ipapi", "AbuseIPDB", "IP2LOCATION")
-		}
-	}
-	companyType := stringAt(mapAt(upstream, "Type"), "CompanyType", "Company")
+	usageType := classifyUsage(typeInfo, factors)
+	companyType := normalizeUsageLabel(stringAt(typeInfo, "CompanyType"))
 	if companyType == "" {
-		if cMap := mapAt(mapAt(upstream, "Type"), "Company"); len(cMap) > 0 {
-			companyType = stringAt(cMap, "IPinfo", "ipregistry", "ipapi")
-		}
+		companyType = normalizeUsageLabel(representativeLabel(mapAt(typeInfo, "Company")))
 	}
+	ipType := normalizeIPTypeLabel(stringAt(info, "Type", "IPType"))
 
 	quality := model.Quality{
-		ASN:          int64(numberAt(info, "ASN")),
+		ASN:          int64(numberAt(info, "ASN", "AutonomousSystemNumber")),
 		Organization: stringAt(info, "Organization", "Org"),
 		CountryCode:  countryCode,
 		City:         city,
@@ -203,6 +214,7 @@ func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 		Longitude:    numberAt(info, "Longitude"),
 		UsageType:    usageType,
 		CompanyType:  companyType,
+		IPType:       ipType,
 		Scores:       scores,
 		Factors:      factors,
 		Media:        mapAt(upstream, "Media"),
@@ -230,7 +242,6 @@ func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 	}, nil
 }
 
-
 func extractJSONObject(raw []byte) []byte {
 	start := bytes.IndexByte(raw, '{')
 	end := bytes.LastIndexByte(raw, '}')
@@ -239,6 +250,232 @@ func extractJSONObject(raw []byte) []byte {
 	}
 	return bytes.TrimSpace(raw[start : end+1])
 }
+
+func classifyUsage(typeInfo, factors map[string]any) string {
+	if direct := normalizeUsageLabel(stringAt(typeInfo, "UsageType")); direct != "" {
+		return direct
+	}
+	if usage := representativeUsage(mapAt(typeInfo, "Usage")); usage != "" {
+		return usage
+	}
+	if company := representativeUsage(mapAt(typeInfo, "Company")); company != "" {
+		return company
+	}
+	if anyTrue(mapAt(factors, "Server")) {
+		return "机房"
+	}
+	return ""
+}
+
+func representativeUsage(values map[string]any) string {
+	counts := map[string]int{}
+	order := make([]string, 0, 3)
+	for _, raw := range orderedValues(values) {
+		label := normalizeUsageLabel(fmt.Sprint(raw))
+		if label == "" {
+			continue
+		}
+		if _, exists := counts[label]; !exists {
+			order = append(order, label)
+		}
+		counts[label]++
+	}
+	best, bestCount := "", 0
+	for _, label := range order {
+		if counts[label] > bestCount {
+			best, bestCount = label, counts[label]
+		}
+	}
+	return best
+}
+
+func representativeLabel(values map[string]any) string {
+	for _, raw := range orderedValues(values) {
+		if label := cleanString(fmt.Sprint(raw)); label != "" {
+			return label
+		}
+	}
+	return ""
+}
+
+func orderedValues(values map[string]any) []any {
+	if len(values) == 0 {
+		return nil
+	}
+	preferred := []string{"IPinfo", "ipregistry", "ipapi", "AbuseIPDB", "IP2LOCATION"}
+	result := make([]any, 0, len(values))
+	seen := map[string]bool{}
+	for _, wanted := range preferred {
+		for key, value := range values {
+			if strings.EqualFold(key, wanted) {
+				result = append(result, value)
+				seen[key] = true
+				break
+			}
+		}
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		if !seen[key] {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		result = append(result, values[key])
+	}
+	return result
+}
+
+func normalizeUsageLabel(label string) string {
+	label = cleanString(label)
+	if label == "" {
+		return ""
+	}
+	lower := strings.ToLower(label)
+	switch {
+	case lower == "dch", strings.Contains(lower, "datacenter"), strings.Contains(lower, "data center"),
+		strings.Contains(lower, "hosting"), strings.Contains(lower, "transit"),
+		strings.Contains(lower, "server"), strings.Contains(lower, "cloud"),
+		strings.Contains(lower, "cdn"), strings.Contains(lower, "机房"), strings.Contains(lower, "数据中心"):
+		return "机房"
+	case strings.Contains(lower, "residential"), strings.Contains(lower, "fixed line"),
+		strings.Contains(lower, "line isp"), strings.Contains(lower, "broadband"),
+		strings.Contains(lower, "mobile"), strings.Contains(lower, "cellular"),
+		strings.Contains(lower, "home"), lower == "isp", lower == "mob", strings.Contains(lower, "家宽"),
+		strings.Contains(lower, "住宅"), strings.Contains(lower, "移动"):
+		return "家宽"
+	case lower == "com", strings.Contains(lower, "business"), strings.Contains(lower, "commercial"),
+		strings.Contains(lower, "company"), strings.Contains(lower, "education"),
+		strings.Contains(lower, "government"), strings.Contains(lower, "organization"),
+		strings.Contains(lower, "banking"), strings.Contains(lower, "商宽"),
+		strings.Contains(lower, "商业"), strings.Contains(lower, "教育"),
+		strings.Contains(lower, "政府"), strings.Contains(lower, "组织"):
+		return "商宽"
+	}
+	return ""
+}
+
+func normalizeIPTypeLabel(label string) string {
+	lower := strings.ToLower(cleanString(label))
+	switch {
+	case strings.Contains(lower, "原生"), strings.Contains(lower, "native"), strings.Contains(lower, "geo-consistent"):
+		return "原生"
+	case strings.Contains(lower, "广播"), strings.Contains(lower, "broadcast"), strings.Contains(lower, "geo-discrepant"):
+		return "广播"
+	default:
+		return ""
+	}
+}
+
+func normalizeCountryCode(value string) string {
+	value = strings.ToUpper(strings.Trim(strings.TrimSpace(cleanString(value)), "[]"))
+	if len(value) != 2 {
+		return ""
+	}
+	return value
+}
+
+func cleanString(value string) string {
+	value = strings.TrimSpace(value)
+	switch strings.ToLower(value) {
+	case "", "null", "<nil>", "n/a", "unknown":
+		return ""
+	default:
+		return value
+	}
+}
+
+func anyTrue(values map[string]any) bool {
+	for _, value := range values {
+		switch typed := value.(type) {
+		case bool:
+			if typed {
+				return true
+			}
+		case string:
+			if strings.EqualFold(strings.TrimSpace(typed), "true") || strings.EqualFold(strings.TrimSpace(typed), "yes") {
+				return true
+			}
+		case map[string]any:
+			if anyTrue(typed) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func mergeNativeMedia(media map[string]any, id string, result prober.ProbeResult) {
+	entry := map[string]any{
+		"ID":        result.ID,
+		"Name":      result.Name,
+		"Category":  result.Category,
+		"Status":    result.Status,
+		"Region":    result.Region,
+		"Quality":   result.Quality,
+		"LatencyMs": result.Latency,
+		"Detail":    result.Detail,
+		"CheckedAt": time.Now().UTC().Format(time.RFC3339),
+	}
+	var existing map[string]any
+	for key, raw := range media {
+		if !strings.EqualFold(key, id) {
+			continue
+		}
+		if candidate, ok := raw.(map[string]any); ok && existing == nil {
+			existing = candidate
+		}
+		delete(media, key)
+	}
+	if existing == nil || !usableMediaEntry(existing) {
+		media[id] = entry
+		return
+	}
+	if id == "youtube" && probeIsYouTubeCN(result) {
+		media[id] = entry
+		return
+	}
+	for key, value := range entry {
+		if _, ok := valueAt(existing, key); !ok || cleanString(fmt.Sprint(valueAtValue(existing, key))) == "" {
+			existing[key] = value
+		}
+	}
+	media[id] = existing
+}
+
+func usableMediaEntry(entry map[string]any) bool {
+	status, ok := valueAt(entry, "Status")
+	if !ok {
+		return false
+	}
+	normalized := strings.ToLower(cleanString(fmt.Sprint(status)))
+	switch normalized {
+	case "", "failed", "failure", "error", "失败", "检测失败", "结果待确认":
+		return false
+	default:
+		return true
+	}
+}
+
+func probeIsYouTubeCN(result prober.ProbeResult) bool {
+	return strings.EqualFold(strings.TrimSpace(result.Region), "CN") || strings.Contains(result.Quality, "送中")
+}
+
+func valueAt(values map[string]any, key string) (any, bool) {
+	for candidate, value := range values {
+		if strings.EqualFold(candidate, key) {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func valueAtValue(values map[string]any, key string) any {
+	value, _ := valueAt(values, key)
+	return value
+}
+
 func mapAt(m map[string]any, key string) map[string]any {
 	if v, ok := m[key].(map[string]any); ok {
 		return v
@@ -258,7 +495,9 @@ func stringAt(m map[string]any, keys ...string) string {
 			if strings.EqualFold(k, key) {
 				switch value := v.(type) {
 				case string:
-					return value
+					if cleaned := cleanString(value); cleaned != "" {
+						return cleaned
+					}
 				case json.Number:
 					return value.String()
 				case float64:
@@ -269,15 +508,20 @@ func stringAt(m map[string]any, keys ...string) string {
 	}
 	return ""
 }
-func numberAt(m map[string]any, key string) float64 {
-	for k, v := range m {
-		if strings.EqualFold(k, key) {
-			switch n := v.(type) {
-			case float64:
-				return n
-			case string:
-				f, _ := strconv.ParseFloat(strings.TrimPrefix(strings.ToUpper(n), "AS"), 64)
-				return f
+func numberAt(m map[string]any, keys ...string) float64 {
+	for _, key := range keys {
+		for k, v := range m {
+			if strings.EqualFold(k, key) {
+				switch n := v.(type) {
+				case float64:
+					return n
+				case json.Number:
+					f, _ := n.Float64()
+					return f
+				case string:
+					f, _ := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(strings.ToUpper(n), "AS")), 64)
+					return f
+				}
 			}
 		}
 	}

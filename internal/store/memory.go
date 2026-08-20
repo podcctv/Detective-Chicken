@@ -44,7 +44,6 @@ type Enrollment struct {
 	Used                bool
 }
 
-
 type Command struct {
 	ID        string    `json:"id"`
 	Type      string    `json:"type"`
@@ -120,23 +119,20 @@ func parseNodeUnlocks(media map[string]any, defaultRegion string) model.NodeUnlo
 		if !ok {
 			continue
 		}
-		statusRaw := strings.TrimSpace(fmt.Sprint(entry["Status"]))
-		regionRaw := strings.TrimSpace(fmt.Sprint(entry["Region"]))
-		if regionRaw == "" || regionRaw == "<nil>" {
+		statusRaw := mediaString(entry, "Status")
+		regionRaw := cleanMediaRegion(mediaString(entry, "Region"))
+		if regionRaw == "" {
 			regionRaw = defaultRegion
 		}
-		typeRaw := strings.TrimSpace(fmt.Sprint(entry["Type"]))
-		if typeRaw == "<nil>" {
-			typeRaw = ""
-		}
+		typeRaw := mediaString(entry, "Type")
 
-		status := "blocked"
+		status := "unknown"
 		switch strings.ToLower(statusRaw) {
 		case "available", "unlocked", "yes", "解锁", "可用", "原生", "允许", "true":
 			status = "available"
-		case "limited", "partial", "仅自制", "部分解锁", "限制":
+		case "limited", "partial", "仅自制", "部分解锁", "限制", "待支持", "中国", "cn", "china", "送中":
 			status = "limited"
-		case "blocked", "no", "不可用", "未解锁", "屏蔽", "失败", "质询", "false":
+		case "blocked", "no", "不可用", "未解锁", "屏蔽", "质询", "禁会员", "false":
 			status = "blocked"
 		}
 
@@ -249,22 +245,25 @@ func parseNodeUnlocks(media map[string]any, defaultRegion string) model.NodeUnlo
 		}
 
 		qualityDesc := statusRaw
-		if customQuality := strings.TrimSpace(fmt.Sprint(entry["Quality"])); customQuality != "" && customQuality != "<nil>" {
+		if customQuality := mediaString(entry, "Quality"); customQuality != "" {
 			qualityDesc = customQuality
 		} else if typeRaw != "" && typeRaw != statusRaw {
 			qualityDesc = typeRaw + " " + statusRaw
 		}
-
-		latencyMs := 0
-		if lat, ok := entry["LatencyMs"].(float64); ok {
-			latencyMs = int(lat)
-		} else if latInt, ok := entry["LatencyMs"].(int); ok {
-			latencyMs = latInt
+		if serviceID == "youtube" && (strings.EqualFold(regionRaw, "CN") || strings.Contains(statusRaw, "中国") || strings.Contains(statusRaw, "送中")) {
+			status = "limited"
+			regionRaw = "CN"
+			qualityDesc = "送中（中国区）"
 		}
 
+		latencyMs := mediaInt(entry, "LatencyMs")
+
 		detailDesc := fmt.Sprintf("%s · %s", serviceName, qualityDesc)
-		if customDetail := strings.TrimSpace(fmt.Sprint(entry["Detail"])); customDetail != "" && customDetail != "<nil>" {
+		if customDetail := mediaString(entry, "Detail"); customDetail != "" {
 			detailDesc = customDetail
+		}
+		if serviceID == "youtube" && regionRaw == "CN" {
+			detailDesc = "YouTube 可达，但内容地区被识别为中国大陆（送中）"
 		}
 
 		info := model.UnlockInfo{
@@ -276,18 +275,79 @@ func parseNodeUnlocks(media map[string]any, defaultRegion string) model.NodeUnlo
 			Quality:   qualityDesc,
 			LatencyMs: latencyMs,
 			Detail:    detailDesc,
+			CheckedAt: mediaString(entry, "CheckedAt"),
 		}
 
 		if category == "ai" {
-			ai[serviceID] = info
+			if current, exists := ai[serviceID]; !exists || preferUnlockInfo(info, current) {
+				ai[serviceID] = info
+			}
 		} else {
-			stream[serviceID] = info
+			if current, exists := stream[serviceID]; !exists || preferUnlockInfo(info, current) {
+				stream[serviceID] = info
+			}
 		}
 	}
 
 	return model.NodeUnlocks{Streaming: stream, AI: ai}
 }
 
+func mediaString(entry map[string]any, wanted string) string {
+	for key, value := range entry {
+		if strings.EqualFold(key, wanted) {
+			return cleanDetectedText(fmt.Sprint(value))
+		}
+	}
+	return ""
+}
+
+func mediaInt(entry map[string]any, wanted string) int {
+	for key, value := range entry {
+		if !strings.EqualFold(key, wanted) {
+			continue
+		}
+		switch typed := value.(type) {
+		case float64:
+			return int(typed)
+		case int:
+			return typed
+		case json.Number:
+			parsed, _ := strconv.Atoi(typed.String())
+			return parsed
+		case string:
+			parsed, _ := strconv.Atoi(strings.TrimSpace(typed))
+			return parsed
+		}
+	}
+	return 0
+}
+
+func cleanMediaRegion(value string) string {
+	value = strings.Trim(strings.TrimSpace(value), "[]")
+	if len(value) == 2 {
+		return strings.ToUpper(value)
+	}
+	return value
+}
+
+func preferUnlockInfo(candidate, current model.UnlockInfo) bool {
+	if candidate.ID == "youtube" {
+		candidateCN := candidate.Region == "CN" || strings.Contains(candidate.Quality, "送中")
+		currentCN := current.Region == "CN" || strings.Contains(current.Quality, "送中")
+		if candidateCN != currentCN {
+			return candidateCN
+		}
+	}
+	priority := func(status string) int {
+		switch status {
+		case "available", "limited", "blocked":
+			return 2
+		default:
+			return 1
+		}
+	}
+	return priority(candidate.Status) > priority(current.Status)
+}
 
 func computeRisk(scores map[string]json.RawMessage) int {
 	maxRisk := 0
@@ -422,7 +482,6 @@ func (m *Memory) PublicDashboard() model.Dashboard {
 	return m.dashboardForNodesLocked(nodes, false)
 }
 
-
 func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool) model.Dashboard {
 	stats := map[string]int{"total": len(nodes)}
 	regions := map[string]int{}
@@ -465,6 +524,9 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 
 		// Aggregate unlock service stats
 		for _, u := range n.Unlocks.Streaming {
+			if u.Status != "available" && u.Status != "limited" && u.Status != "blocked" {
+				continue
+			}
 			s, ok := serviceAgg[u.ID]
 			if !ok {
 				s = &model.ServiceStat{ID: u.ID, Name: u.Name, Category: "streaming"}
@@ -482,6 +544,9 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 			}
 		}
 		for _, u := range n.Unlocks.AI {
+			if u.Status != "available" && u.Status != "limited" && u.Status != "blocked" {
+				continue
+			}
 			s, ok := serviceAgg[u.ID]
 			if !ok {
 				s = &model.ServiceStat{ID: u.ID, Name: u.Name, Category: "ai"}
@@ -510,7 +575,6 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 	} else {
 		stats["streaming_unlock_rate"] = 100
 	}
-
 
 	services := make([]model.ServiceStat, 0, len(serviceAgg))
 	for _, s := range serviceAgg {
@@ -817,7 +881,6 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 	return node, agent, nil
 }
 
-
 func (m *Memory) Agent(id string) (AgentKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -898,62 +961,27 @@ func (m *Memory) SaveReport(r model.Report) error {
 		return ErrNotFound
 	}
 	n.AgentID = r.AgentID
-	if !containsFamily(n.Families, r.Network.Family) {
+	validIP := validReportedIP(r.Network.ReportedIP, r.Network.Family)
+	if validIP && !containsFamily(n.Families, r.Network.Family) {
 		n.Families = append(n.Families, r.Network.Family)
 		sort.Ints(n.Families)
 	}
 	reportRisk := computeRisk(r.Quality.Scores)
-	if n.Family == 0 || r.Network.Family == 4 || n.Family != 4 {
+	if validIP && (n.Family == 0 || r.Network.Family == 4 || n.Family != 4) {
 		n.Family = r.Network.Family
 		n.ReportedIP = r.Network.ReportedIP
 		n.MaskedIP = MaskIP(r.Network.ReportedIP)
-		n.ASN = r.Quality.ASN
-		n.Organization = r.Quality.Organization
-		if r.Quality.CountryCode != "" {
-			n.CountryCode = r.Quality.CountryCode
-		}
-		if r.Quality.Latitude != 0 {
-			n.Latitude = r.Quality.Latitude
-		}
-		if r.Quality.Longitude != 0 {
-			n.Longitude = r.Quality.Longitude
-		}
-		n.Risk = reportRisk
-		n.Netflix = mediaStatus(r.Quality.Media, "netflix")
-		n.ChatGPT = mediaStatus(r.Quality.Media, "chatgpt")
-		n.Unlocks = parseNodeUnlocks(r.Quality.Media, n.CountryCode)
-		n.DNSBL = dnsblCount(r.Quality.Mail)
+		applyReportIdentity(&n, r)
 	}
 
-	if r.Network.Family == 4 {
+	if validIP && r.Network.Family == 4 {
 		n.MaskedIPv4 = MaskIP(r.Network.ReportedIP)
-	} else if r.Network.Family == 6 {
+		n.Warp4 = reportIsWARP(r)
+	} else if validIP && r.Network.Family == 6 {
 		n.MaskedIPv6 = MaskIP(r.Network.ReportedIP)
+		n.Warp6 = reportIsWARP(r)
 	}
-
-	usageLower := strings.ToLower(r.Quality.UsageType)
-	if strings.Contains(usageLower, "residential") || strings.Contains(usageLower, "home") {
-		n.UsageType = "家宽"
-	} else if strings.Contains(usageLower, "business") || strings.Contains(usageLower, "commercial") {
-		n.UsageType = "商宽"
-	} else if strings.Contains(usageLower, "datacenter") || strings.Contains(usageLower, "hosting") || strings.Contains(usageLower, "transit") {
-		n.UsageType = "机房"
-	} else if n.UsageType == "" {
-		n.UsageType = "机房"
-	}
-
-	// Detect Cloudflare WARP and Broadcast vs Native IP
-	if r.Quality.ASN == 13335 || strings.Contains(strings.ToLower(r.Quality.Organization), "cloudflare") {
-		n.IPType = "广播"
-		n.IsWarp = true
-		if r.Network.Family == 4 {
-			n.Warp4 = true
-		} else if r.Network.Family == 6 {
-			n.Warp6 = true
-		}
-	} else {
-		n.IPType = "原生"
-	}
+	n.IsWarp = n.Warp4 || n.Warp6
 
 	if r.CollectedAt.After(n.LastScan) {
 		n.LastScan = r.CollectedAt
@@ -981,6 +1009,135 @@ func (m *Memory) SaveReport(r model.Report) error {
 	return nil
 }
 
+func applyReportIdentity(node *model.Node, report model.Report) {
+	if node == nil {
+		return
+	}
+	quality := report.Quality
+	if quality.ASN > 0 {
+		node.ASN = quality.ASN
+	}
+	if organization := cleanDetectedText(quality.Organization); organization != "" {
+		node.Organization = organization
+	}
+	if country := normalizeDetectedCountry(quality.CountryCode); country != "" {
+		node.CountryCode = country
+	}
+	if quality.Latitude != 0 {
+		node.Latitude = quality.Latitude
+	}
+	if quality.Longitude != 0 {
+		node.Longitude = quality.Longitude
+	}
+	if usage := normalizeDetectedUsage(quality.UsageType); usage != "" {
+		node.UsageType = usage
+	}
+	if ipType := normalizeDetectedIPType(quality.IPType); ipType != "" {
+		node.IPType = ipType
+	}
+	node.Risk = computeRisk(quality.Scores)
+	node.Netflix = mediaStatus(quality.Media, "netflix")
+	node.ChatGPT = mediaStatus(quality.Media, "chatgpt")
+	node.Unlocks = parseNodeUnlocks(quality.Media, node.CountryCode)
+	node.DNSBL = dnsblCount(quality.Mail)
+}
+
+func validReportedIP(value string, family int) bool {
+	address, err := netip.ParseAddr(strings.TrimSpace(value))
+	if err != nil {
+		return false
+	}
+	return (family == 4 && address.Is4()) || (family == 6 && address.Is6())
+}
+
+func reportIsWARP(report model.Report) bool {
+	if report.Network.IsWARP || strings.EqualFold(strings.TrimSpace(report.Quality.UsageType), "warp") {
+		return true
+	}
+	for key, value := range report.Quality.Factors {
+		if strings.EqualFold(key, "warp") && detectedTruthy(value) {
+			return true
+		}
+	}
+	return false
+}
+
+func detectedTruthy(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		normalized := strings.ToLower(strings.TrimSpace(typed))
+		return normalized == "true" || normalized == "yes" || normalized == "on" || normalized == "plus"
+	case float64:
+		return typed != 0
+	case int:
+		return typed != 0
+	case map[string]any:
+		for _, nested := range typed {
+			if detectedTruthy(nested) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func normalizeDetectedUsage(value string) string {
+	lower := strings.ToLower(cleanDetectedText(value))
+	switch {
+	case lower == "dch", strings.Contains(lower, "datacenter"), strings.Contains(lower, "data center"),
+		strings.Contains(lower, "hosting"), strings.Contains(lower, "transit"),
+		strings.Contains(lower, "server"), strings.Contains(lower, "cloud"),
+		strings.Contains(lower, "cdn"), strings.Contains(lower, "机房"), strings.Contains(lower, "数据中心"):
+		return "机房"
+	case strings.Contains(lower, "residential"), strings.Contains(lower, "fixed line"),
+		strings.Contains(lower, "line isp"), strings.Contains(lower, "broadband"),
+		strings.Contains(lower, "mobile"), strings.Contains(lower, "cellular"),
+		strings.Contains(lower, "home"), lower == "isp", lower == "mob", strings.Contains(lower, "家宽"),
+		strings.Contains(lower, "住宅"), strings.Contains(lower, "移动"):
+		return "家宽"
+	case lower == "com", strings.Contains(lower, "business"), strings.Contains(lower, "commercial"),
+		strings.Contains(lower, "company"), strings.Contains(lower, "education"),
+		strings.Contains(lower, "government"), strings.Contains(lower, "organization"),
+		strings.Contains(lower, "banking"), strings.Contains(lower, "商宽"),
+		strings.Contains(lower, "商业"), strings.Contains(lower, "教育"),
+		strings.Contains(lower, "政府"), strings.Contains(lower, "组织"):
+		return "商宽"
+	default:
+		return ""
+	}
+}
+
+func normalizeDetectedIPType(value string) string {
+	lower := strings.ToLower(cleanDetectedText(value))
+	switch {
+	case strings.Contains(lower, "原生"), strings.Contains(lower, "native"), strings.Contains(lower, "geo-consistent"):
+		return "原生"
+	case strings.Contains(lower, "广播"), strings.Contains(lower, "broadcast"), strings.Contains(lower, "geo-discrepant"):
+		return "广播"
+	default:
+		return ""
+	}
+}
+
+func normalizeDetectedCountry(value string) string {
+	value = strings.ToUpper(strings.Trim(strings.TrimSpace(cleanDetectedText(value)), "[]"))
+	if len(value) != 2 {
+		return ""
+	}
+	return value
+}
+
+func cleanDetectedText(value string) string {
+	value = strings.TrimSpace(value)
+	switch strings.ToLower(value) {
+	case "", "null", "<nil>", "n/a", "unknown":
+		return ""
+	default:
+		return value
+	}
+}
 
 func containsFamily(families []int, family int) bool {
 	for _, candidate := range families {
@@ -1043,9 +1200,9 @@ func mediaStatus(media map[string]any, key string) string {
 		switch status {
 		case "available", "unlocked", "yes", "解锁", "可用", "原生":
 			return "available"
-		case "limited", "partial", "仅自制", "部分解锁":
+		case "limited", "partial", "仅自制", "部分解锁", "待支持", "中国", "cn", "china", "送中":
 			return "limited"
-		case "blocked", "no", "不可用", "未解锁", "屏蔽":
+		case "blocked", "no", "不可用", "未解锁", "屏蔽", "禁会员":
 			return "blocked"
 		}
 	}
@@ -1107,4 +1264,3 @@ func (m *Memory) Commands(agentID string) []Command {
 	m.persistLocked()
 	return c
 }
-

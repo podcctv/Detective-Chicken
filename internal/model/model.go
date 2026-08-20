@@ -77,14 +77,13 @@ type Node struct {
 type TaskLog struct {
 	ID        string    `json:"id"`
 	NodeID    string    `json:"node_id"`
-	Type      string    `json:"type"`       // "scan" | "reinstall"
-	Status    string    `json:"status"`     // "pending" | "running" | "completed" | "failed"
+	Type      string    `json:"type"`   // "scan" | "reinstall"
+	Status    string    `json:"status"` // "pending" | "running" | "completed" | "failed"
 	Message   string    `json:"message"`
 	Error     string    `json:"error,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
-
 
 type User struct {
 	ID          string    `json:"id"`
@@ -130,6 +129,7 @@ type Collector struct {
 type Network struct {
 	Family     int    `json:"family"`
 	ReportedIP string `json:"reported_ip"`
+	IsWARP     bool   `json:"is_warp,omitempty"`
 }
 
 type Quality struct {
@@ -141,12 +141,12 @@ type Quality struct {
 	Longitude    float64                    `json:"longitude,omitempty"`
 	UsageType    string                     `json:"usage_type"`
 	CompanyType  string                     `json:"company_type"`
+	IPType       string                     `json:"ip_type,omitempty"`
 	Scores       map[string]json.RawMessage `json:"scores"`
 	Factors      map[string]any             `json:"factors"`
 	Media        map[string]any             `json:"media"`
 	Mail         map[string]any             `json:"mail"`
 }
-
 
 type Report struct {
 	SchemaVersion string          `json:"schema_version"`
@@ -202,7 +202,6 @@ type NodeDetail struct {
 	LatestCollector *Collector        `json:"latest_collector,omitempty"`
 	ReportTime      *time.Time        `json:"report_time,omitempty"`
 }
-
 
 type NetworkSnapshot struct {
 	Family       int         `json:"family"`
