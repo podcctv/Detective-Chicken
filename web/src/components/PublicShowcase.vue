@@ -91,16 +91,6 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
   selectedNode.value = node
   inspectNode.value = node
 }
-
-const copyReinstallScript = (node: Node) => {
-  // Trigger login if unauthenticated or copy generic install
-  const cmd = `curl -fsSL https://detective.428048.xyz/api/v1/install/install.sh | sudo sh`
-  navigator.clipboard.writeText(cmd)
-  copiedCommand.value = true
-  setTimeout(() => {
-    copiedCommand.value = false
-  }, 2500)
-}
 </script>
 
 <template>
@@ -256,7 +246,7 @@ const copyReinstallScript = (node: Node) => {
 
     </main>
 
-    <!-- Node Diagnostic & Reinstall Inspection Modal -->
+    <!-- Card Back: 3D Flip & Expand Detailed Inspection Modal -->
     <Teleport to="body">
       <div v-if="inspectNode" class="modal-backdrop" @click="inspectNode = null">
         <div class="metal-inspect-modal" @click.stop>
@@ -265,72 +255,74 @@ const copyReinstallScript = (node: Node) => {
             <div class="modal-title-wrap">
               <span class="modal-flag">{{ inspectNode.country_code || inspectNode.region }}</span>
               <div>
-                <h3>{{ inspectNode.name }}</h3>
-                <small>{{ inspectNode.provider }} · {{ inspectNode.organization || 'Direct Network' }}</small>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <h3>{{ inspectNode.name }}</h3>
+                  <span class="card-back-tag">卡片背面 · 深度报告</span>
+                </div>
+                <small>{{ inspectNode.provider }} · {{ inspectNode.organization || 'Direct Carrier' }} · AS{{ inspectNode.asn }}</small>
               </div>
             </div>
             <div class="head-actions">
-              <!-- Reinstall Agent Button -->
-              <button
-                class="reinstall-pill-btn"
-                title="系统重装后一键重新接入探针"
-                @click="copyReinstallScript(inspectNode)"
-              >
-                <Check v-if="copiedCommand" :size="14" class="text-emerald" />
-                <Wrench v-else :size="14" />
-                <span>{{ copiedCommand ? '已复制重装命令' : '重装小鸡探针' }}</span>
-              </button>
-              <button class="metal-close-btn" @click="inspectNode = null">
+              <button class="metal-close-btn" title="关闭背面" @click="inspectNode = null">
                 <X :size="18" />
               </button>
             </div>
           </header>
 
           <div class="modal-body">
+            <!-- Terminal-style IP Quality & Threat Ribbon (参考检测脚本) -->
             <div class="modal-metric-ribbon">
               <div>
                 <span>纯净度评分</span>
                 <strong :class="qualityClass(inspectNode.risk)">{{ 100 - inspectNode.risk }} <small>分</small></strong>
               </div>
               <div>
-                <span>网络协议</span>
-                <strong>{{ (inspectNode.families?.length ? inspectNode.families : [inspectNode.family || 4]).map((f) => `IPv${f}`).join(' + ') }}</strong>
+                <span>欺诈风险级别</span>
+                <strong :class="qualityClass(inspectNode.risk)">
+                  {{ inspectNode.risk <= 20 ? '极净优质' : inspectNode.risk <= 50 ? '低风险' : '中度注意' }}
+                </strong>
               </div>
               <div>
-                <span>自治域</span>
-                <strong>AS{{ inspectNode.asn }}</strong>
+                <span>原生/广播属性</span>
+                <strong style="color: #38bdf8;">原生机房 BGP</strong>
               </div>
               <div>
-                <span>脱敏出口</span>
-                <code class="modal-ip">{{ inspectNode.masked_ip }}</code>
+                <span>DNSBL 信誉</span>
+                <strong :class="inspectNode.dnsbl > 0 ? 'text-danger' : 'text-emerald'">
+                  {{ inspectNode.dnsbl > 0 ? `命中 ${inspectNode.dnsbl} 项` : '未命中 (安全)' }}
+                </strong>
               </div>
             </div>
 
-            <!-- Reinstall Notice Box if needed -->
-            <div class="reinstall-guide-box">
-              <div class="guide-title">
-                <Terminal :size="14" />
-                <span>小鸡重装系统后恢复监控：</span>
+            <!-- Network & Routing Info Bar -->
+            <div class="network-hud-bar">
+              <div class="hud-item">
+                <span class="hud-label">公网脱敏 IP</span>
+                <code class="modal-ip">{{ inspectNode.masked_ip }}</code>
               </div>
-              <div class="guide-code-row">
-                <code>curl -fsSL https://detective.428048.xyz/api/v1/install/install.sh | sudo sh</code>
-                <button class="copy-small-btn" @click="copyReinstallScript(inspectNode)">
-                  <Check v-if="copiedCommand" :size="12" />
-                  <Copy v-else :size="12" />
-                  <span>{{ copiedCommand ? '已复制' : '复制' }}</span>
-                </button>
+              <div class="hud-item">
+                <span class="hud-label">协议栈支持</span>
+                <span class="hud-val">{{ (inspectNode.families?.length ? inspectNode.families : [inspectNode.family || 4]).map((f) => `IPv${f}`).join(' + ') }}</span>
+              </div>
+              <div class="hud-item">
+                <span class="hud-label">自治系统 ASN</span>
+                <span class="hud-val">AS{{ inspectNode.asn }} ({{ inspectNode.organization }})</span>
+              </div>
+              <div class="hud-item">
+                <span class="hud-label">地区归属</span>
+                <span class="hud-val">{{ inspectNode.region }} ({{ inspectNode.country_code }})</span>
               </div>
             </div>
 
             <div class="modal-section-title">
               <Sparkles :size="14" />
-              <span>全量 20+ 款品牌 AI 与流媒体解锁矩阵 (含精准延迟)</span>
+              <span>全量 20+ 款品牌 AI 与主流流媒体解锁全景 (含精准延迟与质量)</span>
             </div>
 
             <div class="modal-badges-grid">
               <!-- AI Category -->
               <div class="badge-category-group">
-                <span class="group-label">AI 生产力大模型 (10 款)</span>
+                <span class="group-label">🤖 AI 生产力大模型 (10 款)</span>
                 <div class="group-badges">
                   <MetalBadge
                     v-for="svc in Object.values(inspectNode.unlocks?.ai ?? {})"
@@ -348,7 +340,7 @@ const copyReinstallScript = (node: Node) => {
 
               <!-- Streaming Category -->
               <div class="badge-category-group">
-                <span class="group-label">流媒体与娱乐矩阵 (11 款)</span>
+                <span class="group-label">🎬 流媒体与娱乐矩阵 (11 款)</span>
                 <div class="group-badges">
                   <MetalBadge
                     v-for="svc in Object.values(inspectNode.unlocks?.streaming ?? {})"
@@ -886,7 +878,7 @@ const copyReinstallScript = (node: Node) => {
 .metal-inspect-modal {
   position: relative;
   width: 100%;
-  max-width: 780px;
+  max-width: 820px;
   max-height: 90vh;
   overflow-y: auto;
   background: linear-gradient(145deg, #161e27, #0c1117);
@@ -894,7 +886,24 @@ const copyReinstallScript = (node: Node) => {
   border-radius: 18px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 32px rgba(56, 189, 248, 0.2);
   padding: 24px;
+  animation: cardFlipExpand 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center center;
 }
+
+@keyframes cardFlipExpand {
+  0% {
+    opacity: 0;
+    transform: perspective(1000px) rotateY(-60deg) scale(0.85);
+  }
+  60% {
+    transform: perspective(1000px) rotateY(6deg) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1000px) rotateY(0deg) scale(1);
+  }
+}
+
 .modal-foil {
   position: absolute;
   inset: 0;
@@ -930,6 +939,15 @@ const copyReinstallScript = (node: Node) => {
   font-weight: 800;
   color: #f8fafc;
 }
+.card-back-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
 .modal-title-wrap small {
   font-size: 11px;
   color: #94a3b8;
@@ -939,26 +957,6 @@ const copyReinstallScript = (node: Node) => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.reinstall-pill-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba(56, 189, 248, 0.15);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: 20px;
-  color: #38bdf8;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.reinstall-pill-btn:hover {
-  background: rgba(56, 189, 248, 0.28);
-  color: #fff;
-  border-color: #38bdf8;
 }
 
 .metal-close-btn {
@@ -1012,56 +1010,34 @@ const copyReinstallScript = (node: Node) => {
   color: #38bdf8;
 }
 
-/* Reinstall Guide Box */
-.reinstall-guide-box {
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 10px;
+.network-hud-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
   padding: 10px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.guide-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 600;
-}
-.guide-code-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 6px 10px;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
-.guide-code-row code {
+.hud-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hud-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+}
+.hud-val {
   font-family: 'Fira Code', monospace;
   font-size: 11px;
-  color: #38bdf8;
-  overflow-x: auto;
+  font-weight: 600;
+  color: #f1f5f9;
   white-space: nowrap;
-}
-.copy-small-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #cbd5e1;
-  font-size: 11px;
-  cursor: pointer;
-}
-.copy-small-btn:hover {
-  background: #0284c7;
-  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .modal-section-title {

@@ -127,23 +127,12 @@ const countryFlagEmoji = computed(() => {
       </div>
       <div class="card-border-glow"></div>
 
-      <!-- Top Header Row: EMV Microchip, Provider, Region Pill -->
+      <!-- Top Header Row: Country Badge + Provider + Region in ONE line, Risk Medal on Right -->
       <div class="card-header">
-        <div class="emv-chip-wrap" title="安全探测晶片">
-          <div class="emv-chip">
-            <div class="chip-circuit"></div>
-          </div>
-          <div class="nfc-waves" title="双栈实时流光探测">
-            <Radio :size="16" class="nfc-icon" />
-          </div>
-        </div>
-
-        <div class="card-issuer">
-          <div class="issuer-title">{{ node.provider || 'VPS 节点资产' }}</div>
-          <div class="issuer-region">
-            <span class="region-flag-pill">{{ node.country_code || node.region || 'GL' }}</span>
-            <span class="region-name">{{ node.region }}</span>
-          </div>
+        <div class="card-issuer-row">
+          <span class="region-flag-pill">{{ node.country_code || node.region || 'GL' }}</span>
+          <strong class="issuer-title">{{ node.provider || 'VPS 节点资产' }}</strong>
+          <span v-if="node.region && node.region !== node.country_code" class="issuer-region-text">{{ node.region }}</span>
         </div>
 
         <!-- Node Risk / Quality Holographic Medal -->
@@ -277,14 +266,14 @@ const countryFlagEmoji = computed(() => {
   right: 0;
   top: 0;
   bottom: 0;
-  width: 58%;
+  width: 52%;
   overflow: hidden;
   pointer-events: none;
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
-  mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.4) 30%, rgba(0, 0, 0, 0.9) 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.4) 30%, rgba(0, 0, 0, 0.9) 100%);
-  opacity: 0.22;
+  mask-image: radial-gradient(circle at 82% 50%, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 50%, transparent 95%);
+  -webkit-mask-image: radial-gradient(circle at 82% 50%, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 50%, transparent 95%);
+  opacity: 0.18;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -322,77 +311,44 @@ const countryFlagEmoji = computed(() => {
   gap: 12px;
 }
 
-.emv-chip-wrap {
+.card-issuer-row {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-/* EMV Chip Simulation */
-.emv-chip {
-  width: 38px;
-  height: 28px;
-  background: linear-gradient(135deg, #d4af37 0%, #aa8010 50%, #f3e5ab 100%);
-  border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.6),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.4);
-  position: relative;
-  overflow: hidden;
-}
-.chip-circuit {
-  position: absolute;
-  inset: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.35);
-  border-radius: 3px;
-}
-.chip-circuit::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.nfc-waves {
-  color: #94a3b8;
-  opacity: 0.7;
-}
-
-.card-issuer {
+  min-width: 0;
   flex: 1;
 }
-.issuer-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.issuer-region {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-}
+
 .region-flag-pill {
   font-family: 'Fira Code', monospace;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 800;
-  padding: 1px 5px;
+  padding: 1px 6px;
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.35);
   border-radius: 4px;
+  flex-shrink: 0;
 }
-.region-name {
-  font-size: 11px;
+
+.issuer-title {
+  font-size: 13px;
+  font-weight: 800;
   color: #f1f5f9;
-  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.issuer-region-text {
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Risk Holographic Medal */
