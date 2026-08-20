@@ -4,21 +4,23 @@ import {
   AlertTriangle,
   Bot,
   CheckCircle2,
-  ChevronRight,
-  Clapperboard,
   Columns,
   Cpu,
   Filter,
+  Grid,
   Layers,
+  LayoutGrid,
   Search,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
+  Table,
   Tv,
   XCircle,
   Zap,
-} from '@lucide/vue'
+} from 'lucide-vue-next'
 import type { Node, ServiceCategory, ServiceStat, UnlockInfo } from '../types'
-import StatusBadge from './StatusBadge.vue'
+import MetalBadge from './MetalBadge.vue'
 
 const props = defineProps<{
   nodes: Node[]
@@ -32,37 +34,39 @@ const emit = defineEmits<{
   (e: 'compareNodes', nodeIds: string[]): void
 }>()
 
+const matrixMode = ref<'table' | 'cards'>('table')
 const categoryFilter = ref<ServiceCategory | 'all'>('all')
 const statusFilter = ref<string>('all')
 const searchQuery = ref('')
 const selectedForCompare = ref<string[]>([])
 const activeTooltip = ref<{ node: Node; unlock: UnlockInfo; x: number; y: number } | null>(null)
 
-// Comprehensive service definitions
-const serviceCatalog: { id: string; name: string; category: ServiceCategory; icon: any; hint: string }[] = [
-  // AI Tools
-  { id: 'chatgpt', name: 'ChatGPT', category: 'ai', icon: Bot, hint: 'OpenAI GPT-4o / Web & API' },
-  { id: 'claude', name: 'Claude', category: 'ai', icon: Sparkles, hint: 'Anthropic Claude 3.5 Sonnet' },
-  { id: 'gemini', name: 'Gemini', category: 'ai', icon: Cpu, hint: 'Google Gemini Advanced / AI Studio' },
-  { id: 'midjourney', name: 'Midjourney', category: 'ai', icon: Zap, hint: 'Discord / Web 生成' },
-  { id: 'copilot', name: 'Copilot', category: 'ai', icon: Bot, hint: 'Microsoft Copilot / Bing' },
-  { id: 'grok', name: 'Grok', category: 'ai', icon: Zap, hint: 'xAI Grok / X 平台' },
-  { id: 'perplexity', name: 'Perplexity', category: 'ai', icon: Search, hint: 'Pro 搜索 / API 调用' },
-  { id: 'github_cop', name: 'GitHub Cop', category: 'ai', icon: Cpu, hint: 'GitHub Copilot IDE 补全' },
-  { id: 'deepseek', name: 'DeepSeek', category: 'ai', icon: Sparkles, hint: '官方推理集群' },
-  { id: 'huggingface', name: 'HuggingFace', category: 'ai', icon: Layers, hint: 'Spaces / 模型 Hub' },
+// Comprehensive service catalog (20+ items)
+const serviceCatalog: { id: string; name: string; category: ServiceCategory; hint: string }[] = [
+  // AI Tools (10)
+  { id: 'chatgpt', name: 'ChatGPT', category: 'ai', hint: 'OpenAI GPT-4o / Web & API' },
+  { id: 'claude', name: 'Claude', category: 'ai', hint: 'Anthropic Claude 3.5 Sonnet' },
+  { id: 'gemini', name: 'Gemini', category: 'ai', hint: 'Google Gemini Advanced / AI Studio' },
+  { id: 'deepseek', name: 'DeepSeek', category: 'ai', hint: 'DeepSeek R1/V3 推理服务' },
+  { id: 'midjourney', name: 'Midjourney', category: 'ai', hint: 'Web / Discord AI 绘画' },
+  { id: 'copilot', name: 'Copilot', category: 'ai', hint: 'Microsoft Copilot / Bing AI' },
+  { id: 'grok', name: 'Grok', category: 'ai', hint: 'xAI Grok-2 / X 平台' },
+  { id: 'perplexity', name: 'Perplexity', category: 'ai', hint: 'Pro 搜索 / 实时推理' },
+  { id: 'github_cop', name: 'GitHub Cop', category: 'ai', hint: 'GitHub Copilot IDE 补全' },
+  { id: 'reddit', name: 'Reddit', category: 'ai', hint: 'Reddit 社区讨论与搜索' },
 
-  // Streaming Media
-  { id: 'netflix', name: 'Netflix', category: 'streaming', icon: Tv, hint: '原生 4K / 自制剧判定' },
-  { id: 'disney', name: 'Disney+', category: 'streaming', icon: Clapperboard, hint: 'Star / IMAX Enhanced' },
-  { id: 'youtube', name: 'YouTube Prem', category: 'streaming', icon: Tv, hint: '免广告 / YouTube Music' },
-  { id: 'spotify', name: 'Spotify', category: 'streaming', icon: Zap, hint: '全曲库 / 动态歌词' },
-  { id: 'prime', name: 'Prime Video', category: 'streaming', icon: Clapperboard, hint: 'Amazon 影视库' },
-  { id: 'hbo', name: 'Max (HBO)', category: 'streaming', icon: Tv, hint: '华纳兄弟 / 4K 电影' },
-  { id: 'hulu', name: 'Hulu', category: 'streaming', icon: Tv, hint: 'Live TV / 原生美区' },
-  { id: 'bilibili', name: 'Bilibili', category: 'streaming', icon: Clapperboard, hint: '港澳台 / 东南亚解除限制' },
-  { id: 'tiktok', name: 'TikTok', category: 'streaming', icon: Zap, hint: '免拔卡浏览 / 跨境发帖' },
-  { id: 'appletv', name: 'Apple TV+', category: 'streaming', icon: Tv, hint: 'Apple 官方 CDN 直连' },
+  // Streaming Media (11)
+  { id: 'netflix', name: 'Netflix', category: 'streaming', hint: '原生 4K / 自制剧判定' },
+  { id: 'disney', name: 'Disney+', category: 'streaming', hint: 'Star / IMAX Enhanced' },
+  { id: 'youtube', name: 'YouTube Prem', category: 'streaming', hint: '免广告 / YouTube Music' },
+  { id: 'prime', name: 'Prime Video', category: 'streaming', hint: 'Amazon 影视全库' },
+  { id: 'max', name: 'Max (HBO)', category: 'streaming', hint: '华纳兄弟 / 4K 电影' },
+  { id: 'spotify', name: 'Spotify', category: 'streaming', hint: '无损音质 / 动态歌词' },
+  { id: 'hulu', name: 'Hulu', category: 'streaming', hint: 'Live TV / 原生美区' },
+  { id: 'bahamut', name: '巴哈姆特', category: 'streaming', hint: '台湾动画疯 1080P' },
+  { id: 'abema', name: 'AbemaTV', category: 'streaming', hint: '日本全量动漫与直播' },
+  { id: 'tiktok', name: 'TikTok', category: 'streaming', hint: '免拔卡视频流' },
+  { id: 'dazn', name: 'DAZN', category: 'streaming', hint: '全赛事体育直播' },
 ]
 
 // Displayed columns based on category
@@ -84,7 +88,6 @@ const filteredNodes = computed(() => {
     if (!matchesSearch) return false
     if (statusFilter.value === 'all') return true
 
-    // Check if any service on this node matches the status filter
     const allUnlocks = [
       ...Object.values(node.unlocks?.streaming ?? {}),
       ...Object.values(node.unlocks?.ai ?? {}),
@@ -107,7 +110,6 @@ const dynamicSummary = computed(() => {
   for (const n of nodes) {
     let nodeHasBlocked = false
 
-    // Check all real unlocks on this node
     const streamUnlocks = Object.values(n.unlocks?.streaming ?? {})
     const aiUnlocks = Object.values(n.unlocks?.ai ?? {})
 
@@ -124,18 +126,6 @@ const dynamicSummary = computed(() => {
         if (u.status === 'available') availableStream++
         else if (u.status === 'blocked') nodeHasBlocked = true
       }
-    }
-
-    // Fallback single checks if unlocks object is empty
-    if (aiUnlocks.length === 0 && n.chatgpt) {
-      totalAI++
-      if (n.chatgpt === 'available') availableAI++
-      else if (n.chatgpt === 'blocked') nodeHasBlocked = true
-    }
-    if (streamUnlocks.length === 0 && n.netflix) {
-      totalStream++
-      if (n.netflix === 'available') availableStream++
-      else if (n.netflix === 'blocked') nodeHasBlocked = true
     }
 
     if (n.status === 'online' && n.risk <= 30 && (n.netflix === 'available' || n.chatgpt === 'available')) {
@@ -163,30 +153,6 @@ const getUnlock = (node: Node, serviceId: string): UnlockInfo => {
   const found = node.unlocks?.streaming?.[serviceId] ?? node.unlocks?.ai?.[serviceId]
   if (found) return found
 
-  if (serviceId === 'netflix' && node.netflix) {
-    const st = (node.netflix === 'available' || node.netflix === 'limited' || node.netflix === 'blocked') ? node.netflix : 'untested'
-    return {
-      id: 'netflix',
-      name: 'Netflix',
-      category: 'streaming',
-      status: st,
-      region: node.country_code || '',
-      quality: st === 'available' ? '原生 4K/HDR' : st === 'limited' ? '仅自制剧' : st === 'blocked' ? '未解锁' : '未检测',
-      detail: st === 'available' ? '原生解锁全部内容' : st === 'limited' ? '非自制内容受限' : st === 'blocked' ? '机房过滤拦截' : '未检测',
-    }
-  }
-  if (serviceId === 'chatgpt' && node.chatgpt) {
-    const st = (node.chatgpt === 'available' || node.chatgpt === 'blocked') ? node.chatgpt : 'untested'
-    return {
-      id: 'chatgpt',
-      name: 'ChatGPT',
-      category: 'ai',
-      status: st,
-      region: node.country_code || '',
-      quality: st === 'available' ? 'GPT-4o Web+API' : st === 'blocked' ? 'Turnstile 拦截' : '未检测',
-      detail: st === 'available' ? '直连免验证码' : st === 'blocked' ? 'Cloudflare 质询拦截' : '未检测',
-    }
-  }
   const meta = serviceCatalog.find((s) => s.id === serviceId)
   return {
     id: serviceId,
@@ -251,7 +217,7 @@ const hideCellTooltip = () => {
 
 <template>
   <div class="unlock-matrix-deck">
-    <!-- Top Summary Banner -->
+    <!-- Top Holographic Metrics Bar -->
     <div class="matrix-banner">
       <div class="banner-summary">
         <div class="summary-metric">
@@ -292,7 +258,6 @@ const hideCellTooltip = () => {
       </div>
     </div>
 
-
     <!-- Filter & View Controls Toolbar -->
     <div class="matrix-toolbar">
       <div class="category-tabs" role="tablist">
@@ -312,7 +277,7 @@ const hideCellTooltip = () => {
           @click="categoryFilter = 'ai'"
         >
           <Bot :size="15" />
-          <span>AI 生产力矩阵 (10)</span>
+          <span>AI 生产力 (10)</span>
         </button>
         <button
           class="tab-btn"
@@ -321,12 +286,12 @@ const hideCellTooltip = () => {
           @click="categoryFilter = 'streaming'"
         >
           <Tv :size="15" />
-          <span>流媒体娱乐矩阵 (10)</span>
+          <span>流媒体娱乐 (11)</span>
         </button>
       </div>
 
       <div class="toolbar-right">
-        <!-- Search -->
+        <!-- Search Box -->
         <div class="search-box">
           <Search :size="15" />
           <input v-model="searchQuery" type="search" placeholder="搜索节点、服务或地区..." aria-label="搜索矩阵节点" />
@@ -343,6 +308,26 @@ const hideCellTooltip = () => {
           </select>
         </div>
 
+        <!-- View Mode Switcher -->
+        <div class="mode-toggle-group">
+          <button
+            class="mode-btn"
+            :class="{ active: matrixMode === 'table' }"
+            title="矩阵大表视图"
+            @click="matrixMode = 'table'"
+          >
+            <Table :size="15" />
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: matrixMode === 'cards' }"
+            title="徽章卡片视图"
+            @click="matrixMode = 'cards'"
+          >
+            <LayoutGrid :size="15" />
+          </button>
+        </div>
+
         <!-- Compare Trigger -->
         <button
           class="compare-btn"
@@ -350,37 +335,36 @@ const hideCellTooltip = () => {
           @click="emit('compareNodes', selectedForCompare)"
         >
           <Columns :size="15" />
-          <span>对比选中 ({{ selectedForCompare.length }})</span>
+          <span>对比 ({{ selectedForCompare.length }})</span>
         </button>
       </div>
     </div>
 
-    <!-- High Density Matrix Table -->
-    <div class="matrix-table-wrap">
+    <!-- VIEW 1: Holographic Metallic Matrix Table -->
+    <div v-if="matrixMode === 'table'" class="matrix-table-wrap">
       <table class="matrix-table">
         <thead>
           <tr>
             <th class="col-sticky-node">
               <div class="node-th-content">
                 <span>节点资产 ({{ filteredNodes.length }})</span>
-                <small>点击卡片快速查看</small>
+                <small>点击查看完整诊断</small>
               </div>
             </th>
             <th v-for="service in displayedServices" :key="service.id" class="col-service-th">
               <div class="service-th-content">
-                <component :is="service.icon" :size="14" class="svc-icon" />
                 <span class="svc-name">{{ service.name }}</span>
-                <div class="pass-bar-wrap" :title="`可用率: ${servicePassRates[service.id]?.rate ?? 0}%`">
+                <div class="pass-bar-wrap" :title="`可用率: ${servicePassRates[service.id]?.rate ?? 0}% (${servicePassRates[service.id]?.available ?? 0}/${servicePassRates[service.id]?.testedCount ?? 0})`">
                   <div
                     class="pass-bar"
                     :style="{
                       width: `${servicePassRates[service.id]?.rate ?? 0}%`,
                       backgroundColor:
                         (servicePassRates[service.id]?.rate ?? 0) >= 80
-                          ? 'var(--good, #10b981)'
+                          ? '#10b981'
                           : (servicePassRates[service.id]?.rate ?? 0) >= 50
-                            ? 'var(--warning, #f59e0b)'
-                            : 'var(--danger, #ef4444)',
+                            ? '#f59e0b'
+                            : '#ef4444',
                     }"
                   ></div>
                 </div>
@@ -400,7 +384,7 @@ const hideCellTooltip = () => {
                   :title="`勾选对比 ${node.name}`"
                   @click.stop="toggleCompareSelect(node.id)"
                 />
-                <span class="country-pill">{{ node.country_code }}</span>
+                <span class="country-pill">{{ node.country_code || node.region }}</span>
                 <div class="node-cell-meta">
                   <div class="node-title-row">
                     <strong>{{ node.name }}</strong>
@@ -413,7 +397,7 @@ const hideCellTooltip = () => {
               </div>
             </td>
 
-            <!-- Service Cells -->
+            <!-- Service Cells with MetalBadge Component -->
             <td
               v-for="service in displayedServices"
               :key="service.id"
@@ -421,82 +405,98 @@ const hideCellTooltip = () => {
               @click="
                 () => {
                   const u = getUnlock(node, service.id)
-                  if (u && u.status !== 'untested') emit('inspectUnlock', { node, unlock: u })
-                  else emit('selectNode', node)
+                  emit('inspectUnlock', { node, unlock: u })
                 }
               "
               @mouseenter="(e) => {
                 const u = getUnlock(node, service.id)
-                if (u) showCellTooltip(e, node, u)
+                showCellTooltip(e, node, u)
               }"
               @mouseleave="hideCellTooltip"
             >
-              <div
-                class="unlock-tile"
-                :class="`tile-${getUnlock(node, service.id).status}`"
-              >
-                <div v-if="getUnlock(node, service.id).status === 'available'" class="tile-icon-indicator">
-                  <CheckCircle2 :size="12" />
-                </div>
-                <div v-else-if="getUnlock(node, service.id).status === 'limited'" class="tile-icon-indicator">
-                  <AlertTriangle :size="12" />
-                </div>
-                <div v-else-if="getUnlock(node, service.id).status === 'blocked'" class="tile-icon-indicator">
-                  <XCircle :size="12" />
-                </div>
-                <div v-else class="tile-icon-indicator is-untested">
-                  <span>-</span>
-                </div>
-                <div class="tile-copy">
-                  <span class="tile-status">{{
-                    getUnlock(node, service.id).status === 'available'
-                      ? '解锁'
-                      : getUnlock(node, service.id).status === 'limited'
-                        ? '受限'
-                        : getUnlock(node, service.id).status === 'blocked'
-                          ? '封锁'
-                          : '未测'
-                  }}</span>
-                  <span v-if="getUnlock(node, service.id).region && getUnlock(node, service.id).region !== '-'" class="tile-region">{{ getUnlock(node, service.id).region }}</span>
-                </div>
-              </div>
+              <MetalBadge
+                :service-id="service.id"
+                :name="service.name"
+                :status="getUnlock(node, service.id).status"
+                :region="getUnlock(node, service.id).region"
+                :quality="getUnlock(node, service.id).quality"
+                :latency-ms="getUnlock(node, service.id).latency_ms"
+                size="sm"
+                :show-label="false"
+              />
             </td>
-
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Floating Popover Tooltip for Cell Hover -->
+    <!-- VIEW 2: Metal Badge Cards Grid View -->
+    <div v-else class="matrix-cards-deck">
+      <div v-for="node in filteredNodes" :key="node.id" class="node-badges-card" @click="emit('selectNode', node)">
+        <header class="card-head">
+          <div class="card-node-id">
+            <span class="card-flag">{{ node.country_code || node.region }}</span>
+            <div>
+              <strong>{{ node.name }}</strong>
+              <small>{{ node.provider }} · AS{{ node.asn }}</small>
+            </div>
+          </div>
+          <div class="card-risk-pill" :class="node.risk >= 60 ? 'risk-high' : 'risk-low'">
+            {{ 100 - node.risk }} 分
+          </div>
+        </header>
+
+        <div class="card-badges-flex">
+          <MetalBadge
+            v-for="service in displayedServices"
+            :key="service.id"
+            :service-id="service.id"
+            :name="service.name"
+            :status="getUnlock(node, service.id).status"
+            :region="getUnlock(node, service.id).region"
+            :quality="getUnlock(node, service.id).quality"
+            :latency-ms="getUnlock(node, service.id).latency_ms"
+            size="md"
+            @click="
+              () => {
+                const u = getUnlock(node, service.id)
+                emit('inspectUnlock', { node, unlock: u })
+              }
+            "
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Hover Detail Popover -->
     <Teleport to="body">
       <div
         v-if="activeTooltip"
         class="matrix-popover"
-        :style="{
-          left: `${activeTooltip.x}px`,
-          top: `${activeTooltip.y}px`,
-        }"
+        :style="{ left: `${activeTooltip.x}px`, top: `${activeTooltip.y}px` }"
       >
         <div class="popover-head">
           <strong>{{ activeTooltip.unlock.name }}</strong>
-          <StatusBadge :value="activeTooltip.unlock.status" />
+          <span class="popover-status-badge" :class="activeTooltip.unlock.status">
+            {{ activeTooltip.unlock.status === 'available' ? '解锁' : activeTooltip.unlock.status === 'limited' ? '受限' : activeTooltip.unlock.status === 'blocked' ? '封锁' : '未检测' }}
+          </span>
         </div>
         <div class="popover-body">
-          <div v-if="activeTooltip.unlock.quality" class="popover-line">
-            <span>质量:</span>
-            <strong>{{ activeTooltip.unlock.quality }}</strong>
+          <div class="popover-row">
+            <span>节点</span>
+            <strong>{{ activeTooltip.node.name }} ({{ activeTooltip.node.country_code }})</strong>
           </div>
-          <div v-if="activeTooltip.unlock.region" class="popover-line">
-            <span>区域:</span>
-            <code>{{ activeTooltip.unlock.region }}</code>
+          <div v-if="activeTooltip.unlock.latency_ms" class="popover-row">
+            <span>探测延迟</span>
+            <strong class="text-sky">{{ activeTooltip.unlock.latency_ms }} ms</strong>
           </div>
-          <div v-if="activeTooltip.unlock.latency_ms" class="popover-line">
-            <span>延迟:</span>
-            <code>{{ activeTooltip.unlock.latency_ms }} ms</code>
+          <div v-if="activeTooltip.unlock.quality" class="popover-row">
+            <span>质量等级</span>
+            <span>{{ activeTooltip.unlock.quality }}</span>
           </div>
-          <p v-if="activeTooltip.unlock.detail" class="popover-desc">
+          <div v-if="activeTooltip.unlock.detail" class="popover-desc">
             {{ activeTooltip.unlock.detail }}
-          </p>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -510,83 +510,62 @@ const hideCellTooltip = () => {
   gap: 14px;
 }
 
-/* Summary Banner */
+/* Banner */
 .matrix-banner {
-  background: var(--surface, #1e242b);
-  border: 1px solid var(--border, #343c45);
-  border-radius: 8px;
-  padding: 14px 18px;
-  box-shadow: var(--shadow, 0 4px 16px rgba(0, 0, 0, 0.1));
+  background: linear-gradient(145deg, #182029 0%, #0e141b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .banner-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
 
 .summary-metric {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  min-width: 0;
 }
 
 .metric-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
 }
-.metric-icon.ai {
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-}
-.metric-icon.streaming {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-}
-.metric-icon.best {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-}
-.metric-icon.warn {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-}
+.metric-icon.ai { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.metric-icon.streaming { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+.metric-icon.best { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.metric-icon.warn { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 
-.summary-metric > div {
-  min-width: 0;
-}
 .summary-metric span {
   display: block;
   font-size: 11px;
-  color: var(--muted, #94a3b8);
+  color: #94a3b8;
 }
 .summary-metric strong {
   display: block;
   font-family: 'Fira Code', monospace;
   font-size: 16px;
   font-weight: 700;
-  color: var(--text, #f8fafc);
+  color: #f8fafc;
   margin: 1px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .summary-metric small {
   display: block;
   font-size: 10px;
-  color: var(--faint, #64748b);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #64748b;
 }
 
-.text-good { color: var(--good, #10b981) !important; }
-.text-danger { color: var(--danger, #ef4444) !important; }
+.text-good { color: #10b981 !important; }
+.text-danger { color: #ef4444 !important; }
+.text-sky { color: #38bdf8 !important; }
 
 /* Toolbar */
 .matrix-toolbar {
@@ -599,12 +578,12 @@ const hideCellTooltip = () => {
 
 .category-tabs {
   display: flex;
-  background: var(--surface-2, #242b33);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
   padding: 3px;
-  border-radius: 6px;
-  border: 1px solid var(--border, #343c45);
+  gap: 3px;
 }
-
 .tab-btn {
   display: inline-flex;
   align-items: center;
@@ -612,21 +591,16 @@ const hideCellTooltip = () => {
   padding: 6px 12px;
   background: transparent;
   border: 0;
-  border-radius: 4px;
-  color: var(--muted, #94a3b8);
+  border-radius: 6px;
+  color: #94a3b8;
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
   transition: all 0.15s ease;
 }
-
-.tab-btn:hover {
-  color: var(--text, #f8fafc);
-}
-
 .tab-btn.active {
-  background: var(--surface, #1e242b);
-  color: var(--text, #f8fafc);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  background: #1e293b;
+  color: #38bdf8;
 }
 
 .toolbar-right {
@@ -640,299 +614,240 @@ const hideCellTooltip = () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 10px;
-  background: var(--surface-2, #242b33);
-  border: 1px solid var(--border, #343c45);
-  border-radius: 6px;
-  color: var(--muted, #94a3b8);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #94a3b8;
 }
 .search-box input {
   background: transparent;
   border: 0;
-  color: var(--text, #f8fafc);
+  color: #f8fafc;
   font-size: 12px;
-  width: 180px;
   outline: none;
+  width: 170px;
 }
 
 .filter-dropdown {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 10px;
-  background: var(--surface-2, #242b33);
-  border: 1px solid var(--border, #343c45);
-  border-radius: 6px;
-  color: var(--muted, #94a3b8);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #94a3b8;
 }
 .filter-dropdown select {
   background: transparent;
   border: 0;
-  color: var(--text, #f8fafc);
+  color: #f8fafc;
   font-size: 12px;
   outline: none;
+  cursor: pointer;
+}
+
+.mode-toggle-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 2px;
+}
+.mode-btn {
+  padding: 6px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.mode-btn.active {
+  background: #1e293b;
+  color: #38bdf8;
 }
 
 .compare-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 12px;
-  background: #0284c7;
-  color: #fff;
-  border: 1px solid #0369a1;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
   font-size: 12px;
   font-weight: 600;
-  transition: all 0.15s ease;
+  cursor: pointer;
 }
-.compare-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  background: var(--surface-2, #242b33);
-  border-color: var(--border, #343c45);
-  color: var(--muted, #94a3b8);
+.compare-btn:not(:disabled) {
+  background: #0284c7;
+  color: #fff;
+  border-color: #38bdf8;
 }
 
-/* Matrix Table */
+/* Table View */
 .matrix-table-wrap {
-  width: 100%;
   overflow-x: auto;
-  background: var(--surface, #1e242b);
-  border: 1px solid var(--border, #343c45);
-  border-radius: 8px;
-  box-shadow: var(--shadow, 0 4px 16px rgba(0, 0, 0, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: #0c1117;
 }
 
 .matrix-table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 1100px;
+  border-collapse: collapse;
+}
+
+.matrix-table th {
+  padding: 10px 8px;
+  background: #131922;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: center;
+  font-size: 11px;
 }
 
 .col-sticky-node {
   position: sticky;
   left: 0;
   z-index: 10;
-  background: var(--surface, #1e242b);
-  width: 220px;
+  background: #131922;
   min-width: 220px;
-  border-right: 1px solid var(--border, #343c45);
+  text-align: left !important;
 }
 
-th.col-sticky-node {
-  background: var(--surface-2, #242b33);
-}
-
-.node-th-content {
-  padding: 12px 14px;
-  text-align: left;
-}
-.node-th-content span {
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text, #f8fafc);
-}
-.node-th-content small {
-  display: block;
-  font-size: 10px;
-  color: var(--muted, #94a3b8);
-}
-
-.col-service-th {
-  padding: 10px 8px;
-  background: var(--surface-2, #242b33);
-  border-bottom: 1px solid var(--border, #343c45);
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
-  text-align: center;
-  min-width: 95px;
-}
-
-.service-th-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.svc-icon {
-  color: var(--muted, #94a3b8);
-}
-.svc-name {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text, #f8fafc);
-  white-space: nowrap;
-}
-
-.pass-bar-wrap {
-  width: 48px;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.pass-bar {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-/* Rows */
 .matrix-row {
-  border-bottom: 1px solid var(--border, #343c45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   transition: background 0.15s ease;
 }
 .matrix-row:hover {
-  background: var(--surface-2, #242b33);
-}
-.matrix-row:hover .col-sticky-node {
-  background: var(--surface-2, #242b33);
-}
-.matrix-row.selected .col-sticky-node {
-  box-shadow: inset 3px 0 0 #38bdf8;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .matrix-row td {
   padding: 8px 6px;
-  border-bottom: 1px solid var(--border, #343c45);
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: center;
   vertical-align: middle;
+  border-right: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .node-cell-flex {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   cursor: pointer;
 }
-
-.compare-checkbox {
-  cursor: pointer;
-  accent-color: #0284c7;
-}
-
 .country-pill {
-  width: 28px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 5px;
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
   border-radius: 4px;
-  font-family: 'Fira Code', monospace;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.node-cell-meta {
-  min-width: 0;
-  flex: 1;
 }
 .node-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 6px;
 }
 .node-title-row strong {
   font-size: 12px;
-  color: var(--text, #f8fafc);
-  white-space: nowrap;
+  color: #f8fafc;
 }
-.node-cell-meta small {
-  display: block;
-  color: var(--muted, #94a3b8);
-  font-size: 10px;
-  white-space: nowrap;
-}
-
 .risk-mini-badge {
   font-family: 'Fira Code', monospace;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 9.5px;
+  font-weight: 800;
   padding: 0 4px;
   border-radius: 3px;
 }
-.risk-high { color: #ef4444; background: rgba(239, 68, 68, 0.15); }
-.risk-mid { color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
 .risk-low { color: #10b981; background: rgba(16, 185, 129, 0.15); }
+.risk-mid { color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
+.risk-high { color: #ef4444; background: rgba(239, 68, 68, 0.15); }
 
-/* Tile Cells */
-.matrix-cell {
-  text-align: center;
-  cursor: pointer;
-}
-
-.unlock-tile {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 10.5px;
-  font-weight: 500;
-  transition: all 0.15s ease;
-  min-width: 76px;
-}
-
-.unlock-tile:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.15);
-}
-
-.tile-icon-indicator {
-  display: grid;
-  place-items: center;
-}
-
-.tile-available {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-}
-
-.tile-limited {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
-}
-
-.tile-blocked {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-}
-
-.tile-untested,
-.tile-unknown {
-  color: var(--faint, #64748b);
-  background: rgba(148, 163, 184, 0.04);
-  border: 1px dashed rgba(148, 163, 184, 0.18);
-  opacity: 0.55;
-}
-
-.tile-icon-indicator.is-untested {
-  font-size: 11px;
-  font-family: monospace;
-  opacity: 0.6;
-}
-
-
-.tile-region {
-  font-family: 'Fira Code', monospace;
-  font-size: 8.5px;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 1px 3px;
+.pass-bar-wrap {
+  width: 44px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
-  margin-left: 2px;
+  margin: 3px auto 0;
+  overflow: hidden;
+}
+.pass-bar {
+  height: 100%;
+  border-radius: 2px;
+}
+
+/* Cards View */
+.matrix-cards-deck {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  gap: 16px;
+}
+.node-badges-card {
+  background: linear-gradient(145deg, #161e27, #0c1117);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.node-badges-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 8px;
+}
+.card-node-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-flag {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.card-node-id strong {
+  display: block;
+  font-size: 13px;
+  color: #f8fafc;
+}
+.card-node-id small {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+.card-risk-pill {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.card-badges-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* Hover Popover */
@@ -945,12 +860,11 @@ th.col-sticky-node {
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: 6px;
+  border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   font-size: 11px;
 }
-
 .popover-head {
   display: flex;
   align-items: center;
@@ -959,44 +873,28 @@ th.col-sticky-node {
   padding-bottom: 6px;
   margin-bottom: 6px;
 }
-.popover-head strong {
-  color: #f8fafc;
-  font-size: 12px;
-}
-
-.popover-body {
-  display: grid;
-  gap: 4px;
-}
-.popover-line {
-  display: flex;
-  justify-content: space-between;
-  color: #94a3b8;
-}
-.popover-line code {
-  color: #f8fafc;
-  font-family: 'Fira Code', monospace;
-}
-.popover-desc {
-  margin: 4px 0 0;
-  color: #cbd5e1;
+.popover-status-badge {
   font-size: 10px;
-  line-height: 1.4;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
 }
+.popover-status-badge.available { color: #10b981; background: rgba(16, 185, 129, 0.2); }
+.popover-status-badge.limited { color: #f59e0b; background: rgba(245, 158, 11, 0.2); }
+.popover-status-badge.blocked { color: #ef4444; background: rgba(239, 68, 68, 0.2); }
 
-@media (max-width: 1024px) {
-  .banner-summary {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.popover-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
 }
-
-@media (max-width: 640px) {
-  .banner-summary {
-    grid-template-columns: 1fr;
-  }
-  .category-tabs {
-    width: 100%;
-    overflow-x: auto;
-  }
+.popover-row span { color: #94a3b8; }
+.popover-desc {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  padding-top: 4px;
 }
 </style>

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/podcctv/detective-chicken/internal/agent/prober"
 	"github.com/podcctv/detective-chicken/internal/model"
 )
 
@@ -42,6 +43,15 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
+	// 1. Run Go Native Prober concurrently
+	nativeChan := make(chan map[string]prober.ProbeResult, 1)
+	go func() {
+		p := prober.NewProber(family, 6*time.Second)
+		nativeChan <- p.RunAll(ctx)
+	}()
+
+	// 2. Run Upstream Script for ASN, Geo, Risk scores, etc.
 	flag := "-4"
 	if family == 6 {
 		flag = "-6"
@@ -51,7 +61,42 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
-	return finishCollection(stdout.Bytes(), stderr.String(), err, family)
+
+	nativeResults := <-nativeChan
+
+	report, collectErr := finishCollection(stdout.Bytes(), stderr.String(), err, family)
+	if collectErr != nil && len(nativeResults) > 0 {
+		// Fallback report if upstream script totally failed
+		report = model.Report{
+			ReportID:    newID("rep"),
+			CollectedAt: time.Now().UTC(),
+			Network:     model.Network{Family: family},
+			Quality:     model.Quality{},
+		}
+	} else if collectErr != nil {
+		return model.Report{}, collectErr
+	}
+
+	// Merge Native Prober results into report.Quality.Media
+	if report.Quality.Media == nil {
+		report.Quality.Media = make(map[string]any)
+	}
+	for id, res := range nativeResults {
+		// If upstream already reported a status (e.g. Netflix, Disney, Youtube), prefer native result for latency/status if available, or keep
+		report.Quality.Media[id] = map[string]any{
+			"ID":         res.ID,
+			"Name":       res.Name,
+			"Category":   res.Category,
+			"Status":     res.Status,
+			"Region":     res.Region,
+			"Quality":    res.Quality,
+			"LatencyMs":  res.Latency,
+			"Detail":     res.Detail,
+			"CheckedAt":  time.Now().UTC().Format(time.RFC3339),
+		}
+	}
+
+	return report, nil
 }
 
 func finishCollection(stdout []byte, stderr string, runErr error, family int) (model.Report, error) {
@@ -64,6 +109,7 @@ func finishCollection(stdout []byte, stderr string, runErr error, family int) (m
 	}
 	return model.Report{}, parseErr
 }
+
 
 func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 	raw = stripANSI(raw)

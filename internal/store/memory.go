@@ -222,6 +222,22 @@ func parseNodeUnlocks(media map[string]any, defaultRegion string) model.NodeUnlo
 			serviceID = "bilibili"
 			serviceName = "Bilibili"
 			category = "streaming"
+		case "bahamut", "gamer":
+			serviceID = "bahamut"
+			serviceName = "巴哈姆特动画疯"
+			category = "streaming"
+		case "abema", "abematv":
+			serviceID = "abema"
+			serviceName = "AbemaTV"
+			category = "streaming"
+		case "dazn":
+			serviceID = "dazn"
+			serviceName = "DAZN"
+			category = "streaming"
+		case "tvb", "tvbanywhere":
+			serviceID = "tvb"
+			serviceName = "TVB Anywhere"
+			category = "streaming"
 		case "appletv", "apple_tv", "appletv+":
 			serviceID = "appletv"
 			serviceName = "Apple TV+"
@@ -229,18 +245,33 @@ func parseNodeUnlocks(media map[string]any, defaultRegion string) model.NodeUnlo
 		}
 
 		qualityDesc := statusRaw
-		if typeRaw != "" && typeRaw != statusRaw {
+		if customQuality := strings.TrimSpace(fmt.Sprint(entry["Quality"])); customQuality != "" && customQuality != "<nil>" {
+			qualityDesc = customQuality
+		} else if typeRaw != "" && typeRaw != statusRaw {
 			qualityDesc = typeRaw + " " + statusRaw
 		}
 
+		latencyMs := 0
+		if lat, ok := entry["LatencyMs"].(float64); ok {
+			latencyMs = int(lat)
+		} else if latInt, ok := entry["LatencyMs"].(int); ok {
+			latencyMs = latInt
+		}
+
+		detailDesc := fmt.Sprintf("%s · %s", serviceName, qualityDesc)
+		if customDetail := strings.TrimSpace(fmt.Sprint(entry["Detail"])); customDetail != "" && customDetail != "<nil>" {
+			detailDesc = customDetail
+		}
+
 		info := model.UnlockInfo{
-			ID:       serviceID,
-			Name:     serviceName,
-			Category: category,
-			Status:   status,
-			Region:   regionRaw,
-			Quality:  qualityDesc,
-			Detail:   fmt.Sprintf("%s · %s", serviceName, qualityDesc),
+			ID:        serviceID,
+			Name:      serviceName,
+			Category:  category,
+			Status:    status,
+			Region:    regionRaw,
+			Quality:   qualityDesc,
+			LatencyMs: latencyMs,
+			Detail:    detailDesc,
 		}
 
 		if category == "ai" {
@@ -252,6 +283,7 @@ func parseNodeUnlocks(media map[string]any, defaultRegion string) model.NodeUnlo
 
 	return model.NodeUnlocks{Streaming: stream, AI: ai}
 }
+
 
 func computeRisk(scores map[string]json.RawMessage) int {
 	maxRisk := 0
