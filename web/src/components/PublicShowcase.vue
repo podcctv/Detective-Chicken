@@ -3,27 +3,27 @@ import { computed, ref } from 'vue'
 import {
   Activity,
   Bot,
+  Check,
+  Copy,
   CreditCard,
-  Globe2,
   Layers,
   LogIn,
   Moon,
-  Radar,
   RefreshCw,
   Server,
   ShieldCheck,
   Sparkles,
   Sun,
+  Terminal,
   Trophy,
   Tv,
+  Wrench,
   X,
   Zap,
 } from '@lucide/vue'
 
 import CreditCardNode from './CreditCardNode.vue'
 import MetalBadge from './MetalBadge.vue'
-import Globe3D from './Globe3D.vue'
-import RadarScanner3D from './RadarScanner3D.vue'
 import UnlockMatrix from './UnlockMatrix.vue'
 import type { Dashboard, Node } from '../types'
 
@@ -34,12 +34,14 @@ const props = defineProps<{
   refreshing: boolean
 }>()
 
-defineEmits<{ login: []; refresh: []; theme: [] }>()
+const emit = defineEmits<{ login: []; refresh: []; theme: [] }>()
 
-const publicView = ref<'cards' | 'globe' | 'matrix' | 'ranking'>('cards')
+// Default to 'matrix' as requested: 默认显示 AI / 流媒体 全景矩阵
+const publicView = ref<'matrix' | 'cards' | 'ranking'>('matrix')
 const selectedNode = ref<Node | null>(null)
 const inspectNode = ref<Node | null>(null)
 const activeRegionFilter = ref<string>('all')
+const copiedCommand = ref(false)
 
 const qualityClass = (risk: number) =>
   risk >= 60 ? 'risk-high' : risk >= 35 ? 'risk-mid' : 'risk-low'
@@ -90,6 +92,16 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
   selectedNode.value = node
   inspectNode.value = node
 }
+
+const copyReinstallScript = (node: Node) => {
+  // Trigger login if unauthenticated or copy generic install
+  const cmd = `curl -fsSL https://detective.428048.xyz/api/v1/install/install.sh | sudo sh`
+  navigator.clipboard.writeText(cmd)
+  copiedCommand.value = true
+  setTimeout(() => {
+    copiedCommand.value = false
+  }, 2500)
+}
 </script>
 
 <template>
@@ -103,12 +115,21 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
         </div>
         <div class="brand-titles">
           <span class="brand-main">鸡探长<span class="brand-tag">TITANIUM</span></span>
-          <small class="brand-sub">DETECTIVE CHICKEN · 节点质量全息研判平台</small>
+          <small class="brand-sub">DETECTIVE CHICKEN · 全球 VPS 质量与 AI/流媒体全景研判</small>
         </div>
       </div>
 
       <!-- Segmented Metallic View Tabs -->
       <div class="public-nav-tabs" role="tablist" aria-label="视图模式切换">
+        <button
+          class="public-tab"
+          :class="{ active: publicView === 'matrix' }"
+          role="tab"
+          @click="publicView = 'matrix'"
+        >
+          <Layers :size="15" />
+          <span>AI / 流媒体 全景矩阵</span>
+        </button>
         <button
           class="public-tab"
           :class="{ active: publicView === 'cards' }"
@@ -120,30 +141,12 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
         </button>
         <button
           class="public-tab"
-          :class="{ active: publicView === 'globe' }"
-          role="tab"
-          @click="publicView = 'globe'"
-        >
-          <Globe2 :size="15" />
-          <span>3D 全球态势</span>
-        </button>
-        <button
-          class="public-tab"
-          :class="{ active: publicView === 'matrix' }"
-          role="tab"
-          @click="publicView = 'matrix'"
-        >
-          <Layers :size="15" />
-          <span>20+ 款品牌矩阵</span>
-        </button>
-        <button
-          class="public-tab"
           :class="{ active: publicView === 'ranking' }"
           role="tab"
           @click="publicView = 'ranking'"
         >
           <Trophy :size="15" />
-          <span>天梯排行榜</span>
+          <span>综合战力天梯榜</span>
         </button>
       </div>
 
@@ -151,7 +154,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
       <div class="public-actions">
         <div class="telemetry-live-pill">
           <span class="pulse-emerald"></span>
-          <span>100% 真实探针实时同步</span>
+          <span>100% 真实探针并发采集</span>
         </div>
         <button
           class="metal-icon-btn"
@@ -181,11 +184,11 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
         <div class="hero-intro">
           <div class="hero-badge">
             <ShieldCheck :size="14" />
-            <span>ENTERPRISE GRADE IP QUALITY & MULTI-MODEL DISCOVERY</span>
+            <span>ENTERPRISE GRADE IP QUALITY & 20+ SERVICES DISCOVERY</span>
           </div>
-          <h1 class="hero-title">全球 VPS 算力资产质量与解锁全息看板</h1>
+          <h1 class="hero-title">全球 VPS 质量、IP 纯净度与 20+ 服务解锁全景矩阵</h1>
           <p class="hero-desc">
-            无缝洞悉脱敏后全球节点的 IP 纯净度、权威风险数据库评分（Scamalytics/AbuseIPDB/IPQS）与 20+ 款主流流媒体（Netflix/Disney+/YouTube）及 AI 模型（ChatGPT/Claude/Gemini/DeepSeek）的真实解锁生态。
+            100% 真实网络探测，直观洞悉脱敏后全球节点的 IP 纯净度评分（Scamalytics/AbuseIPDB/IPQS）与 20+ 款主流流媒体（Netflix/Disney+/YouTube/Prime）及 AI 模型（ChatGPT/Claude/Gemini/DeepSeek）的真实解锁状态与网络延迟。
           </p>
         </div>
 
@@ -235,8 +238,18 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
 
       <div v-if="loading" class="loading-line public-loading"></div>
 
-      <!-- VIEW 1: Credit Card Fleet Gallery (默认金属卡片展厅) -->
-      <section v-if="publicView === 'cards'" class="public-cards-view">
+      <!-- VIEW 1: Full 20+ Brand Unlock Matrix (默认第一展示页) -->
+      <section v-if="publicView === 'matrix'" class="public-matrix-view">
+        <UnlockMatrix
+          :nodes="data.nodes"
+          :services="data.services"
+          :selected-node-id="selectedNode?.id"
+          @select-node="(n) => { selectedNode = n; inspectNode = n }"
+        />
+      </section>
+
+      <!-- VIEW 2: Credit Card Fleet Gallery (金属卡片展厅) -->
+      <section v-else-if="publicView === 'cards'" class="public-cards-view">
         <div class="fleet-toolbar">
           <div class="region-filter-chips">
             <button
@@ -258,7 +271,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
           </div>
 
           <div class="fleet-meta-hint">
-            <span>🖱️ 悬浮卡片体验 3D 陀螺仪视差与全息反光</span>
+            <span>💳 鼠标悬浮体验 3D 陀螺仪视差与全息反光</span>
           </div>
         </div>
 
@@ -280,36 +293,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
         </div>
       </section>
 
-      <!-- VIEW 2: 3D Holographic Globe & Radar Command Hub -->
-      <section v-else-if="publicView === 'globe'" class="public-3d-hub">
-        <div class="tactical-split-layout">
-          <div class="globe-main-panel">
-            <Globe3D
-              :nodes="data.nodes"
-              :selected-id="selectedNode?.id"
-              @select="(n) => { selectedNode = n; inspectNode = n }"
-            />
-          </div>
-          <div class="radar-side-panel">
-            <RadarScanner3D
-              :nodes="data.nodes"
-              :active-node="selectedNode || data.nodes[0]"
-            />
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 3: Full 20+ Brand Unlock Matrix -->
-      <section v-else-if="publicView === 'matrix'" class="public-matrix-view">
-        <UnlockMatrix
-          :nodes="data.nodes"
-          :services="data.services"
-          :selected-node-id="selectedNode?.id"
-          @select-node="(n) => { selectedNode = n; inspectNode = n }"
-        />
-      </section>
-
-      <!-- VIEW 4: Power Rankings Leaderboard -->
+      <!-- VIEW 3: Power Rankings Leaderboard (天梯榜) -->
       <section v-else-if="publicView === 'ranking'" class="public-ranking-view">
         <div class="ranking-split-grid">
           <div class="metal-panel">
@@ -351,7 +335,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
               <Zap :size="18" class="text-sky" />
               <div>
                 <h2>天梯榜量化算法与口径</h2>
-                <small>双引擎轻量级握手 + 权威数据库严谨核验</small>
+                <small>Go 原生毫秒级握手 + 权威数据库严谨核验</small>
               </div>
             </div>
             <div class="criteria-list">
@@ -373,7 +357,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
       </section>
     </main>
 
-    <!-- Node Diagnostic Inspection Modal -->
+    <!-- Node Diagnostic & Reinstall Inspection Modal -->
     <Teleport to="body">
       <div v-if="inspectNode" class="modal-backdrop" @click="inspectNode = null">
         <div class="metal-inspect-modal" @click.stop>
@@ -386,9 +370,21 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
                 <small>{{ inspectNode.provider }} · {{ inspectNode.organization || 'Direct Network' }}</small>
               </div>
             </div>
-            <button class="metal-close-btn" @click="inspectNode = null">
-              <X :size="18" />
-            </button>
+            <div class="head-actions">
+              <!-- Reinstall Agent Button -->
+              <button
+                class="reinstall-pill-btn"
+                title="系统重装后一键重新接入探针"
+                @click="copyReinstallScript(inspectNode)"
+              >
+                <Check v-if="copiedCommand" :size="14" class="text-emerald" />
+                <Wrench v-else :size="14" />
+                <span>{{ copiedCommand ? '已复制重装命令' : '重装小鸡探针' }}</span>
+              </button>
+              <button class="metal-close-btn" @click="inspectNode = null">
+                <X :size="18" />
+              </button>
+            </div>
           </header>
 
           <div class="modal-body">
@@ -411,6 +407,22 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
               </div>
             </div>
 
+            <!-- Reinstall Notice Box if needed -->
+            <div class="reinstall-guide-box">
+              <div class="guide-title">
+                <Terminal :size="14" />
+                <span>小鸡重装系统后恢复监控：</span>
+              </div>
+              <div class="guide-code-row">
+                <code>curl -fsSL https://detective.428048.xyz/api/v1/install/install.sh | sudo sh</code>
+                <button class="copy-small-btn" @click="copyReinstallScript(inspectNode)">
+                  <Check v-if="copiedCommand" :size="12" />
+                  <Copy v-else :size="12" />
+                  <span>{{ copiedCommand ? '已复制' : '复制' }}</span>
+                </button>
+              </div>
+            </div>
+
             <div class="modal-section-title">
               <Sparkles :size="14" />
               <span>全量 20+ 款品牌 AI 与流媒体解锁矩阵 (含精准延迟)</span>
@@ -419,7 +431,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
             <div class="modal-badges-grid">
               <!-- AI Category -->
               <div class="badge-category-group">
-                <span class="group-label">AI 生产力大模型</span>
+                <span class="group-label">AI 生产力大模型 (10 款)</span>
                 <div class="group-badges">
                   <MetalBadge
                     v-for="svc in Object.values(inspectNode.unlocks?.ai ?? {})"
@@ -437,7 +449,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
 
               <!-- Streaming Category -->
               <div class="badge-category-group">
-                <span class="group-label">流媒体与娱乐矩阵</span>
+                <span class="group-label">流媒体与娱乐矩阵 (11 款)</span>
                 <div class="group-badges">
                   <MetalBadge
                     v-for="svc in Object.values(inspectNode.unlocks?.streaming ?? {})"
@@ -462,7 +474,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
     <footer class="public-footer">
       <div class="footer-meta">
         <span>鸡探长 (Detective Chicken) · 100% 真实探针驱动 · 20+ 款主流服务态势研判平台</span>
-        <span>WebGL 3D 硬件加速 · 公开展示已实施末段脱敏保护</span>
+        <span>公开展示已实施末段脱敏保护 · 账号后台可享完整探针配置与告警管理</span>
       </div>
     </footer>
   </div>
@@ -837,13 +849,6 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
   color: #64748b;
 }
 
-/* 3D Hub */
-.tactical-split-layout {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 20px;
-}
-
 /* Rankings View */
 .ranking-split-grid {
   display: grid;
@@ -1004,6 +1009,7 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
   justify-content: space-between;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding-bottom: 14px;
+  gap: 12px;
 }
 .modal-title-wrap {
   display: flex;
@@ -1028,6 +1034,32 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
 .modal-title-wrap small {
   font-size: 11px;
   color: #94a3b8;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reinstall-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 20px;
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.reinstall-pill-btn:hover {
+  background: rgba(56, 189, 248, 0.28);
+  color: #fff;
+  border-color: #38bdf8;
 }
 
 .metal-close-btn {
@@ -1081,6 +1113,58 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
   color: #38bdf8;
 }
 
+/* Reinstall Guide Box */
+.reinstall-guide-box {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.guide-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.guide-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.guide-code-row code {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: #38bdf8;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.copy-small-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 11px;
+  cursor: pointer;
+}
+.copy-small-btn:hover {
+  background: #0284c7;
+  color: #fff;
+}
+
 .modal-section-title {
   display: flex;
   align-items: center;
@@ -1131,7 +1215,6 @@ const onInspectService = ({ node }: { node: Node; serviceId: string }) => {
   .hero-gauges-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .tactical-split-layout,
   .ranking-split-grid {
     grid-template-columns: 1fr;
   }

@@ -43,6 +43,7 @@ import {
   Sun,
   Tv,
   UserCog,
+  Wrench,
   X,
   Zap,
 } from '@lucide/vue'
@@ -83,7 +84,8 @@ const loading = ref(true)
 const refreshing = ref(false)
 const dark = ref(true)
 const menuOpen = ref(false)
-const viewMode = ref<'deck' | 'matrix' | 'fleet' | 'radar' | 'alerts' | 'settings'>('deck')
+const viewMode = ref<'matrix' | 'fleet' | 'deck' | 'radar' | 'alerts' | 'settings'>('matrix')
+
 
 const search = ref('')
 const filter = ref('all')
@@ -423,6 +425,28 @@ const closeEnrollment = () => {
     scan_interval_minutes: 360,
   }
 }
+
+const reinstallModalOpen = ref(false)
+const reinstallData = ref<{ nodeId: string; nodeName: string; installCommand: string; installUrl: string } | null>(null)
+
+const triggerReinstall = async (node: Node | NodeDetail) => {
+  try {
+    const res = await api<{ token: string; install_command: string; install_url: string }>(
+      `/api/v1/nodes/${node.id}/reinstall`,
+      { method: 'POST' }
+    )
+    reinstallData.value = {
+      nodeId: node.id,
+      nodeName: node.name,
+      installCommand: res.install_command,
+      installUrl: res.install_url,
+    }
+    reinstallModalOpen.value = true
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '生成重装命令失败')
+  }
+}
+
 
 const updateScanInterval = async (node: NodeDetail, minutes: number) => {
   try {
@@ -981,16 +1005,25 @@ onBeforeUnmount(() => {
                   <td>
                     <StatusBadge :value="node.status" />
                   </td>
-                  <td>
+                  <td style="white-space: nowrap;">
                     <button
                       class="icon-btn"
-                      style="width: 32px; height: 32px;"
+                      style="width: 30px; height: 30px; margin-right: 4px;"
+                      title="重装小鸡脚本"
+                      @click.stop="triggerReinstall(node)"
+                    >
+                      <Wrench :size="14" />
+                    </button>
+                    <button
+                      class="icon-btn"
+                      style="width: 30px; height: 30px;"
                       title="打开详情抽屉"
                       @click.stop="openNode(node); drawerTab = 'overview'"
                     >
                       <ChevronRight :size="16" />
                     </button>
                   </td>
+
                 </tr>
               </tbody>
             </table>
@@ -1275,9 +1308,12 @@ onBeforeUnmount(() => {
 
           <div class="drawer-actions">
             <button class="secondary-btn" @click="selected = null">关闭</button>
+            <button class="secondary-btn" @click="triggerReinstall(selected)">
+              <Wrench :size="15" /> 重装小鸡探针
+            </button>
             <button
               class="secondary-btn"
-              @click="openCompare([selected.id, 'node_hkg_01'])"
+              @click="openCompare([selected.id, data.nodes[0]?.id || selected.id])"
             >
               <Columns :size="15" /> 加入对比
             </button>
@@ -1297,6 +1333,33 @@ onBeforeUnmount(() => {
       @close="compareModalOpen = false"
       @remove-node="removeCompareNode"
     />
+
+    <!-- Reinstall VPS Modal -->
+    <Transition name="modal">
+      <div v-if="reinstallModalOpen && reinstallData" class="modal-backdrop" @click.self="reinstallModalOpen = false">
+        <section class="modal" role="dialog" aria-modal="true">
+          <div class="modal-head">
+            <div>
+              <h2>重新安装小鸡探针 · {{ reinstallData.nodeName }}</h2>
+              <p>小鸡重装系统后，直接运行下方命令即可重新连线并保留全部历史数据</p>
+            </div>
+            <button class="icon-btn" aria-label="关闭" @click="reinstallModalOpen = false">
+              <X :size="18" />
+            </button>
+          </div>
+          <div class="enrollment-result" style="padding: 16px 20px;">
+            <div style="font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">一键极速重装命令 (root 权限运行):</div>
+            <div style="display: flex; gap: 8px; align-items: center; background: #0c1117; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <code style="flex: 1; color: #38bdf8; font-family: 'Fira Code', monospace; word-break: break-all; font-size: 12px;">{{ reinstallData.installCommand }}</code>
+              <button class="primary-btn" style="flex-shrink: 0;" @click="copyText(reinstallData.installCommand, '重装命令已复制')">
+                <Copy :size="14" /> 复制命令
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Transition>
+
 
     <!-- Add VPS Enrollment Modal -->
     <Transition name="modal">

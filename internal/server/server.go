@@ -66,12 +66,14 @@ func (a *API) routes(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"items": a.store.DashboardFor(p.User.ID, p.User.Role == "admin").Alerts})
 	}))
 	mux.HandleFunc("POST /api/v1/nodes/{id}/scan", a.authenticated(a.scan))
+	mux.HandleFunc("POST /api/v1/nodes/{id}/reinstall", a.authenticated(a.reinstallNode))
 	mux.HandleFunc("POST /api/v1/enrollment-tokens", a.authenticated(a.enrollment))
 	mux.HandleFunc("POST /api/v1/agents/register", a.register)
 	mux.HandleFunc("POST /api/v1/heartbeats", a.signed(a.heartbeat))
 	mux.HandleFunc("POST /api/v1/reports", a.signed(a.report))
 	mux.HandleFunc("GET /api/v1/agents/commands", a.signed(a.commands))
 }
+
 
 func (a *API) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +173,25 @@ func (a *API) enrollment(w http.ResponseWriter, r *http.Request) {
 	installURL := publicBaseURL(r) + "/api/v1/install/" + e.Token + ".sh"
 	writeJSON(w, 201, map[string]any{"token": e.Token, "expires_at": e.ExpiresAt, "max_uses": 1, "install_url": installURL, "install_command": "curl -fsSL '" + installURL + "' | sudo sh"})
 }
+
+func (a *API) reinstallNode(w http.ResponseWriter, r *http.Request) {
+	principal := requestPrincipal(r)
+	nodeID := r.PathValue("id")
+	e, err := a.store.CreateReenrollment(nodeID, principal.User.ID, principal.User.Role == "admin")
+	if err != nil {
+		apiError(w, 404, "NODE_NOT_FOUND", "node not found")
+		return
+	}
+	installURL := publicBaseURL(r) + "/api/v1/install/" + e.Token + ".sh"
+	writeJSON(w, 201, map[string]any{
+		"token":           e.Token,
+		"expires_at":      e.ExpiresAt,
+		"max_uses":        1,
+		"install_url":     installURL,
+		"install_command": "curl -fsSL '" + installURL + "' | sudo sh",
+	})
+}
+
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	var in struct {

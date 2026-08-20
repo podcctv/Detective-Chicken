@@ -32,6 +32,7 @@ type Enrollment struct {
 	Token               string
 	TenantID            string
 	OwnerUserID         string
+	NodeID              string
 	NodeName            string
 	Provider            string
 	Region              string
@@ -42,6 +43,7 @@ type Enrollment struct {
 	ExpiresAt           time.Time
 	Used                bool
 }
+
 
 type Command struct {
 	ID        string    `json:"id"`
@@ -713,6 +715,33 @@ func (m *Memory) CreateEnrollment(tenantID, ownerUserID, name, provider, region,
 	return e
 }
 
+func (m *Memory) CreateReenrollment(nodeID, userID string, admin bool) (Enrollment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	raw, ok := m.nodes[nodeID]
+	if !ok || (!admin && raw.OwnerUserID != userID) {
+		return Enrollment{}, ErrNotFound
+	}
+	interval := raw.ScanIntervalMinutes
+	if interval == 0 {
+		interval = DefaultScanIntervalMinutes
+	}
+	e := Enrollment{
+		Token:               randomID("et"),
+		TenantID:            raw.TenantID,
+		OwnerUserID:         raw.OwnerUserID,
+		NodeID:              raw.ID,
+		NodeName:            raw.Name,
+		Provider:            raw.Provider,
+		Region:              raw.Region,
+		ScanIntervalMinutes: interval,
+		ExpiresAt:           time.Now().UTC().Add(30 * time.Minute),
+	}
+	m.enrollments[e.Token] = e
+	m.persistLocked()
+	return e, nil
+}
+
 func (m *Memory) Enrollment(token string) (Enrollment, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -733,6 +762,21 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 	e.Used = true
 	m.enrollments[token] = e
 	now := time.Now().UTC()
+
+	// If re-enrolling an existing node
+	if e.NodeID != "" {
+		if existing, exists := m.nodes[e.NodeID]; exists {
+			agent := AgentKey{AgentID: randomID("agt"), NodeID: existing.ID, TenantID: existing.TenantID, PublicKey: append([]byte(nil), publicKey...)}
+			existing.AgentID = agent.AgentID
+			existing.Status = "online"
+			existing.LastSeen = now
+			m.nodes[existing.ID] = existing
+			m.agents[agent.AgentID] = agent
+			m.persistLocked()
+			return existing, agent, nil
+		}
+	}
+
 	node := model.Node{
 		ID:                  randomID("node"),
 		TenantID:            e.TenantID,
@@ -745,7 +789,6 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 		ScanIntervalMinutes: e.ScanIntervalMinutes,
 		Unlocks:             model.NodeUnlocks{},
 		LastSeen:            now,
-
 		LastScan:            time.Time{},
 	}
 	node.MaskedIP = "等待首次上报"
@@ -756,6 +799,7 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 	m.persistLocked()
 	return node, agent, nil
 }
+
 
 func (m *Memory) Agent(id string) (AgentKey, error) {
 	m.mu.RLock()
