@@ -9,3 +9,9 @@ web/node_modules/
 web/dist/
 coverage.out
 *.tsbuildinfo
+*.pem
+*.key
+id_*
+.deploy/
+scratch/
+

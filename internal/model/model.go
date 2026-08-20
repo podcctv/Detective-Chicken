@@ -5,34 +5,65 @@ import (
 	"time"
 )
 
+type UnlockInfo struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Category  string `json:"category"` // "streaming" | "ai" | "social"
+	Status    string `json:"status"`   // "available" | "limited" | "blocked" | "unknown"
+	Region    string `json:"region,omitempty"`
+	Quality   string `json:"quality,omitempty"`
+	LatencyMs int    `json:"latency_ms,omitempty"`
+	Detail    string `json:"detail,omitempty"`
+	CheckedAt string `json:"checked_at,omitempty"`
+}
+
+type NodeUnlocks struct {
+	Streaming map[string]UnlockInfo `json:"streaming"`
+	AI        map[string]UnlockInfo `json:"ai"`
+}
+
+type ServiceStat struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Category  string `json:"category"`
+	Total     int    `json:"total"`
+	Available int    `json:"available"`
+	Limited   int    `json:"limited"`
+	Blocked   int    `json:"blocked"`
+	Rate      int    `json:"rate"`
+}
+
 type Node struct {
-	ID                  string    `json:"id"`
-	TenantID            string    `json:"tenant_id"`
-	OwnerUserID         string    `json:"-"`
-	AgentID             string    `json:"agent_id,omitempty"`
-	Name                string    `json:"name"`
-	Provider            string    `json:"provider"`
-	Region              string    `json:"region"`
-	Family              int       `json:"family"`
-	Families            []int     `json:"families,omitempty"`
-	ReportedIP          string    `json:"-"`
-	MaskedIP            string    `json:"masked_ip"`
-	IPAddress           string    `json:"ip_address,omitempty"`
-	CanViewFullIP       bool      `json:"can_view_full_ip"`
-	ASN                 int64     `json:"asn"`
-	Organization        string    `json:"organization"`
-	CountryCode         string    `json:"country_code"`
-	Risk                int       `json:"risk"`
-	Status              string    `json:"status"`
-	Netflix             string    `json:"netflix"`
-	ChatGPT             string    `json:"chatgpt"`
-	DNSBL               int       `json:"dnsbl"`
-	IPChanged           bool      `json:"ip_changed"`
-	LastSeen            time.Time `json:"last_seen"`
-	LastScan            time.Time `json:"last_scan"`
-	ScanIntervalMinutes int       `json:"scan_interval_minutes"`
-	QualityStatus       string    `json:"quality_status"`
-	LastScanError       string    `json:"last_scan_error,omitempty"`
+	ID                  string      `json:"id"`
+	TenantID            string      `json:"tenant_id"`
+	OwnerUserID         string      `json:"-"`
+	AgentID             string      `json:"agent_id,omitempty"`
+	Name                string      `json:"name"`
+	Provider            string      `json:"provider"`
+	Region              string      `json:"region"`
+	Family              int         `json:"family"`
+	Families            []int       `json:"families,omitempty"`
+	ReportedIP          string      `json:"-"`
+	MaskedIP            string      `json:"masked_ip"`
+	IPAddress           string      `json:"ip_address,omitempty"`
+	CanViewFullIP       bool        `json:"can_view_full_ip"`
+	ASN                 int64       `json:"asn"`
+	Organization        string      `json:"organization"`
+	CountryCode         string      `json:"country_code"`
+	Latitude            float64     `json:"latitude,omitempty"`
+	Longitude           float64     `json:"longitude,omitempty"`
+	Risk                int         `json:"risk"`
+	Status              string      `json:"status"`
+	Netflix             string      `json:"netflix"`
+	ChatGPT             string      `json:"chatgpt"`
+	Unlocks             NodeUnlocks `json:"unlocks"`
+	DNSBL               int         `json:"dnsbl"`
+	IPChanged           bool        `json:"ip_changed"`
+	LastSeen            time.Time   `json:"last_seen"`
+	LastScan            time.Time   `json:"last_scan"`
+	ScanIntervalMinutes int         `json:"scan_interval_minutes"`
+	QualityStatus       string      `json:"quality_status"`
+	LastScanError       string      `json:"last_scan_error,omitempty"`
 }
 
 type User struct {
@@ -122,6 +153,7 @@ type Dashboard struct {
 	Rankings    []NodeRanking  `json:"rankings"`
 	Alerts      []Alert        `json:"alerts"`
 	Regions     map[string]int `json:"regions"`
+	Services    []ServiceStat  `json:"services,omitempty"`
 }
 
 type NodeRanking struct {
@@ -147,15 +179,16 @@ type NodeDetail struct {
 }
 
 type NetworkSnapshot struct {
-	Family       int       `json:"family"`
-	MaskedIP     string    `json:"masked_ip"`
-	IPAddress    string    `json:"ip_address,omitempty"`
-	ASN          int64     `json:"asn"`
-	Organization string    `json:"organization"`
-	CountryCode  string    `json:"country_code"`
-	Risk         int       `json:"risk"`
-	Netflix      string    `json:"netflix"`
-	ChatGPT      string    `json:"chatgpt"`
-	CollectedAt  time.Time `json:"collected_at"`
-	Quality      Quality   `json:"quality"`
+	Family       int         `json:"family"`
+	MaskedIP     string      `json:"masked_ip"`
+	IPAddress    string      `json:"ip_address,omitempty"`
+	ASN          int64       `json:"asn"`
+	Organization string      `json:"organization"`
+	CountryCode  string      `json:"country_code"`
+	Risk         int         `json:"risk"`
+	Netflix      string      `json:"netflix"`
+	ChatGPT      string      `json:"chatgpt"`
+	Unlocks      NodeUnlocks `json:"unlocks,omitempty"`
+	CollectedAt  time.Time   `json:"collected_at"`
+	Quality      Quality     `json:"quality"`
 }

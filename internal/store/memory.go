@@ -107,15 +107,57 @@ func MaskIP(ip string) string {
 	return ip
 }
 
+func mockNodeUnlocks(regionCode, netflixStatus, chatgptStatus string) model.NodeUnlocks {
+	stream := map[string]model.UnlockInfo{
+		"netflix":    {ID: "netflix", Name: "Netflix", Category: "streaming", Status: netflixStatus, Region: regionCode, Quality: "原生 4K/HDR", LatencyMs: 42, Detail: "解锁全部非自制剧"},
+		"disney":     {ID: "disney", Name: "Disney+", Category: "streaming", Status: "available", Region: regionCode, Quality: "Star+ / IMAX", LatencyMs: 55, Detail: "全量内容畅享"},
+		"youtube":    {ID: "youtube", Name: "YouTube Premium", Category: "streaming", Status: "available", Region: regionCode, Quality: "免广告 / 4K60", LatencyMs: 28, Detail: "支持后台播放与 YouTube Music"},
+		"spotify":    {ID: "spotify", Name: "Spotify", Category: "streaming", Status: "available", Region: regionCode, Quality: "无损音质", LatencyMs: 35, Detail: "全区曲库可用"},
+		"prime":      {ID: "prime", Name: "Prime Video", Category: "streaming", Status: "available", Region: regionCode, Quality: "1080P", LatencyMs: 62, Detail: "区域版权库可用"},
+		"hbo":        {ID: "hbo", Name: "Max (HBO)", Category: "streaming", Status: "available", Region: regionCode, Quality: "4K HDR", LatencyMs: 78, Detail: "华纳原生影视"},
+		"hulu":       {ID: "hulu", Name: "Hulu", Category: "streaming", Status: "available", Region: "US", Quality: "1080P", LatencyMs: 82, Detail: "原生美区支持"},
+		"bilibili":   {ID: "bilibili", Name: "Bilibili (港澳台/东南亚)", Category: "streaming", Status: "available", Region: regionCode, Quality: "4K 超清", LatencyMs: 25, Detail: "解除区域版权限制"},
+		"tiktok":     {ID: "tiktok", Name: "TikTok", Category: "streaming", Status: "available", Region: regionCode, Quality: "免拔卡", LatencyMs: 38, Detail: "商业推流正常"},
+		"appletv":    {ID: "appletv", Name: "Apple TV+", Category: "streaming", Status: "available", Region: regionCode, Quality: "4K 杜比视界", LatencyMs: 32, Detail: "官方 CDN 原生直连"},
+	}
+
+	if netflixStatus == "limited" {
+		stream["netflix"] = model.UnlockInfo{ID: "netflix", Name: "Netflix", Category: "streaming", Status: "limited", Region: regionCode, Quality: "仅自制剧 (Originals Only)", LatencyMs: 58, Detail: "非自制内容受限"}
+	} else if netflixStatus == "blocked" {
+		stream["netflix"] = model.UnlockInfo{ID: "netflix", Name: "Netflix", Category: "streaming", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "机房 IP 拦截过滤"}
+		stream["hbo"] = model.UnlockInfo{ID: "hbo", Name: "Max (HBO)", Category: "streaming", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "区域阻断 403"}
+	}
+
+	ai := map[string]model.UnlockInfo{
+		"chatgpt":     {ID: "chatgpt", Name: "ChatGPT / OpenAI", Category: "ai", Status: chatgptStatus, Region: regionCode, Quality: "GPT-4o / Web+API", LatencyMs: 85, Detail: "Cloudflare Turnstile 判定通过"},
+		"claude":      {ID: "claude", Name: "Claude (Anthropic)", Category: "ai", Status: "available", Region: regionCode, Quality: "Sonnet 3.5 / API", LatencyMs: 95, Detail: "控制台访问正常"},
+		"gemini":      {ID: "gemini", Name: "Google Gemini", Category: "ai", Status: "available", Region: regionCode, Quality: "Advanced / AI Studio", LatencyMs: 65, Detail: "欧洲/亚洲边缘加速"},
+		"midjourney":  {ID: "midjourney", Name: "Midjourney", Category: "ai", Status: "available", Region: regionCode, Quality: "Discord / Web", LatencyMs: 110, Detail: "官方代理通道畅通"},
+		"copilot":     {ID: "copilot", Name: "Microsoft Copilot", Category: "ai", Status: "available", Region: regionCode, Quality: "Bing / Edge", LatencyMs: 70, Detail: "免验证访问"},
+		"grok":        {ID: "grok", Name: "xAI Grok", Category: "ai", Status: "available", Region: regionCode, Quality: "X Platform", LatencyMs: 88, Detail: "助手响应正常"},
+		"perplexity":  {ID: "perplexity", Name: "Perplexity AI", Category: "ai", Status: "available", Region: regionCode, Quality: "Pro Search", LatencyMs: 75, Detail: "直连免验证码"},
+		"github_cop":  {ID: "github_cop", Name: "GitHub Copilot", Category: "ai", Status: "available", Region: regionCode, Quality: "IDE Telemetry", LatencyMs: 52, Detail: "代码补全低延迟"},
+		"deepseek":    {ID: "deepseek", Name: "DeepSeek", Category: "ai", Status: "available", Region: regionCode, Quality: "官方推理集群", LatencyMs: 45, Detail: "直连中继畅通"},
+		"huggingface": {ID: "huggingface", Name: "HuggingFace", Category: "ai", Status: "available", Region: regionCode, Quality: "Spaces & Hub", LatencyMs: 60, Detail: "模型下载无限速"},
+	}
+
+	if chatgptStatus == "blocked" {
+		ai["chatgpt"] = model.UnlockInfo{ID: "chatgpt", Name: "ChatGPT / OpenAI", Category: "ai", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "Cloudflare Turnstile 拦截"}
+		ai["claude"] = model.UnlockInfo{ID: "claude", Name: "Claude (Anthropic)", Category: "ai", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "机房 IP 403 阻断"}
+	}
+
+	return model.NodeUnlocks{Streaming: stream, AI: ai}
+}
+
 func (m *Memory) seed() {
 	now := time.Now().UTC()
 	seedNodes := []model.Node{
-		{ID: "node_hkg_01", TenantID: "tenant_demo", Name: "HK-CMI-01", Provider: "DMIT", Region: "香港", Family: 4, ReportedIP: "103.145.12.81", ASN: 906, Organization: "DMIT Cloud Services", CountryCode: "HK", Risk: 18, Status: "online", Netflix: "available", ChatGPT: "available", DNSBL: 0, LastSeen: now.Add(-42 * time.Second), LastScan: now.Add(-2 * time.Hour)},
-		{ID: "node_lax_02", TenantID: "tenant_demo", Name: "US-LAX-02", Provider: "RackNerd", Region: "洛杉矶", Family: 4, ReportedIP: "198.51.100.27", ASN: 62240, Organization: "Clouvider Limited", CountryCode: "US", Risk: 72, Status: "alert", Netflix: "limited", ChatGPT: "available", DNSBL: 8, IPChanged: true, LastSeen: now.Add(-2 * time.Minute), LastScan: now.Add(-28 * time.Minute)},
-		{ID: "node_nrt_03", TenantID: "tenant_demo", Name: "JP-NRT-03", Provider: "Vultr", Region: "东京", Family: 4, ReportedIP: "45.76.201.19", ASN: 20473, Organization: "The Constant Company", CountryCode: "JP", Risk: 11, Status: "online", Netflix: "available", ChatGPT: "available", DNSBL: 0, LastSeen: now.Add(-51 * time.Second), LastScan: now.Add(-6 * time.Hour)},
-		{ID: "node_fra_04", TenantID: "tenant_demo", Name: "DE-FRA-04", Provider: "Hetzner", Region: "法兰克福", Family: 6, ReportedIP: "2a01:4f8:c2c:17::1", ASN: 24940, Organization: "Hetzner Online", CountryCode: "DE", Risk: 34, Status: "online", Netflix: "blocked", ChatGPT: "available", DNSBL: 1, LastSeen: now.Add(-74 * time.Second), LastScan: now.Add(-4 * time.Hour)},
-		{ID: "node_sin_05", TenantID: "tenant_demo", Name: "SG-SIN-05", Provider: "LightNode", Region: "新加坡", Family: 4, ReportedIP: "172.104.51.233", ASN: 63949, Organization: "Akamai Connected Cloud", CountryCode: "SG", Risk: 48, Status: "warning", Netflix: "available", ChatGPT: "blocked", DNSBL: 3, LastSeen: now.Add(-4 * time.Minute), LastScan: now.Add(-11 * time.Hour)},
-		{ID: "node_ams_06", TenantID: "tenant_demo", Name: "NL-AMS-06", Provider: "GreenCloud", Region: "阿姆斯特丹", Family: 4, ReportedIP: "185.22.153.44", ASN: 49544, Organization: "iFog GmbH", CountryCode: "NL", Risk: 22, Status: "offline", Netflix: "available", ChatGPT: "available", DNSBL: 0, LastSeen: now.Add(-19 * time.Minute), LastScan: now.Add(-13 * time.Hour)},
+		{ID: "node_hkg_01", TenantID: "tenant_demo", Name: "HK-CMI-01", Provider: "DMIT", Region: "香港", Family: 4, ReportedIP: "103.145.12.81", ASN: 906, Organization: "DMIT Cloud Services", CountryCode: "HK", Latitude: 22.3193, Longitude: 114.1694, Risk: 18, Status: "online", Netflix: "available", ChatGPT: "available", Unlocks: mockNodeUnlocks("HK", "available", "available"), DNSBL: 0, LastSeen: now.Add(-42 * time.Second), LastScan: now.Add(-2 * time.Hour)},
+		{ID: "node_lax_02", TenantID: "tenant_demo", Name: "US-LAX-02", Provider: "RackNerd", Region: "洛杉矶", Family: 4, ReportedIP: "198.51.100.27", ASN: 62240, Organization: "Clouvider Limited", CountryCode: "US", Latitude: 34.0522, Longitude: -118.2437, Risk: 72, Status: "alert", Netflix: "limited", ChatGPT: "available", Unlocks: mockNodeUnlocks("US", "limited", "available"), DNSBL: 8, IPChanged: true, LastSeen: now.Add(-2 * time.Minute), LastScan: now.Add(-28 * time.Minute)},
+		{ID: "node_nrt_03", TenantID: "tenant_demo", Name: "JP-NRT-03", Provider: "Vultr", Region: "东京", Family: 4, ReportedIP: "45.76.201.19", ASN: 20473, Organization: "The Constant Company", CountryCode: "JP", Latitude: 35.6762, Longitude: 139.6503, Risk: 11, Status: "online", Netflix: "available", ChatGPT: "available", Unlocks: mockNodeUnlocks("JP", "available", "available"), DNSBL: 0, LastSeen: now.Add(-51 * time.Second), LastScan: now.Add(-6 * time.Hour)},
+		{ID: "node_fra_04", TenantID: "tenant_demo", Name: "DE-FRA-04", Provider: "Hetzner", Region: "法兰克福", Family: 6, ReportedIP: "2a01:4f8:c2c:17::1", ASN: 24940, Organization: "Hetzner Online", CountryCode: "DE", Latitude: 50.1109, Longitude: 8.6821, Risk: 34, Status: "online", Netflix: "blocked", ChatGPT: "available", Unlocks: mockNodeUnlocks("DE", "blocked", "available"), DNSBL: 1, LastSeen: now.Add(-74 * time.Second), LastScan: now.Add(-4 * time.Hour)},
+		{ID: "node_sin_05", TenantID: "tenant_demo", Name: "SG-SIN-05", Provider: "LightNode", Region: "新加坡", Family: 4, ReportedIP: "172.104.51.233", ASN: 63949, Organization: "Akamai Connected Cloud", CountryCode: "SG", Latitude: 1.3521, Longitude: 103.8198, Risk: 48, Status: "warning", Netflix: "available", ChatGPT: "blocked", Unlocks: mockNodeUnlocks("SG", "available", "blocked"), DNSBL: 3, LastSeen: now.Add(-4 * time.Minute), LastScan: now.Add(-11 * time.Hour)},
+		{ID: "node_ams_06", TenantID: "tenant_demo", Name: "NL-AMS-06", Provider: "GreenCloud", Region: "阿姆斯特丹", Family: 4, ReportedIP: "185.22.153.44", ASN: 49544, Organization: "iFog GmbH", CountryCode: "NL", Latitude: 52.3676, Longitude: 4.9041, Risk: 22, Status: "offline", Netflix: "available", ChatGPT: "available", Unlocks: mockNodeUnlocks("NL", "available", "available"), DNSBL: 0, LastSeen: now.Add(-19 * time.Minute), LastScan: now.Add(-13 * time.Hour)},
 	}
 	for i, n := range seedNodes {
 		n.MaskedIP = MaskIP(n.ReportedIP)
@@ -132,7 +174,7 @@ func (m *Memory) seed() {
 	}
 	m.alerts = []model.Alert{
 		{ID: "alert_01", NodeID: "node_lax_02", NodeName: "US-LAX-02", Type: "risk_spike", Severity: "critical", Title: "综合风险分显著上升", Detail: "24 小时内从 41 上升到 72，超过变化阈值 20。", CreatedAt: now.Add(-26 * time.Minute)},
-		{ID: "alert_02", NodeID: "node_sin_05", NodeName: "SG-SIN-05", Type: "media_degraded", Severity: "warning", Title: "ChatGPT 解锁能力下降", Detail: "状态由 available 变为 blocked。", CreatedAt: now.Add(-2 * time.Hour)},
+		{ID: "alert_02", NodeID: "node_sin_05", NodeName: "SG-SIN-05", Type: "media_degraded", Severity: "warning", Title: "ChatGPT / Claude 解锁能力下降", Detail: "状态由 available 变为 blocked，Cloudflare 质询拦截。", CreatedAt: now.Add(-2 * time.Hour)},
 		{ID: "alert_03", NodeID: "node_ams_06", NodeName: "NL-AMS-06", Type: "heartbeat_missing", Severity: "warning", Title: "节点心跳超时", Detail: "已连续 19 分钟未收到心跳。", CreatedAt: now.Add(-9 * time.Minute)},
 	}
 }
@@ -141,38 +183,7 @@ func (m *Memory) Dashboard() model.Dashboard {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	nodes := m.nodesLocked()
-	stats := map[string]int{"total": len(nodes)}
-	regions := map[string]int{}
-	var trend []model.TrendPoint
-	for _, n := range nodes {
-		if n.Status != "offline" {
-			stats["online"]++
-		}
-		if n.Status == "alert" || n.Status == "warning" {
-			stats["abnormal"]++
-		}
-		if n.Risk >= 60 {
-			stats["high_risk"]++
-		}
-		if n.IPChanged {
-			stats["ip_changes"]++
-		}
-		if !n.LastScan.IsZero() {
-			stats["scanned"]++
-			if n.Netflix != "available" || n.ChatGPT != "available" {
-				stats["media_degraded"]++
-			}
-		}
-		if n.DNSBL > 0 {
-			stats["dnsbl_added"]++
-		}
-		regions[n.CountryCode]++
-	}
-	if s := m.series["node_lax_02"]; len(s) > 0 {
-		trend = append(trend, s...)
-	}
-	alerts := append([]model.Alert(nil), m.alerts...)
-	return model.Dashboard{GeneratedAt: time.Now().UTC(), Stats: stats, Trend: trend, Nodes: nodes, Alerts: alerts, Regions: regions}
+	return m.dashboardForNodesLocked(nodes, true)
 }
 
 func (m *Memory) DashboardFor(userID string, admin bool) model.Dashboard {
@@ -200,6 +211,13 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 	stats := map[string]int{"total": len(nodes)}
 	regions := map[string]int{}
 	allowed := make(map[string]bool, len(nodes))
+
+	serviceAgg := map[string]*model.ServiceStat{}
+	totalAIUnlocks := 0
+	totalAIChecks := 0
+	totalStreamUnlocks := 0
+	totalStreamChecks := 0
+
 	for _, n := range nodes {
 		allowed[n.ID] = true
 		if n.Status != "offline" {
@@ -224,7 +242,69 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 			stats["dnsbl_added"]++
 		}
 		regions[n.CountryCode]++
+
+		// Aggregate unlock service stats
+		for _, u := range n.Unlocks.Streaming {
+			s, ok := serviceAgg[u.ID]
+			if !ok {
+				s = &model.ServiceStat{ID: u.ID, Name: u.Name, Category: "streaming"}
+				serviceAgg[u.ID] = s
+			}
+			s.Total++
+			totalStreamChecks++
+			if u.Status == "available" {
+				s.Available++
+				totalStreamUnlocks++
+			} else if u.Status == "limited" {
+				s.Limited++
+			} else {
+				s.Blocked++
+			}
+		}
+		for _, u := range n.Unlocks.AI {
+			s, ok := serviceAgg[u.ID]
+			if !ok {
+				s = &model.ServiceStat{ID: u.ID, Name: u.Name, Category: "ai"}
+				serviceAgg[u.ID] = s
+			}
+			s.Total++
+			totalAIChecks++
+			if u.Status == "available" {
+				s.Available++
+				totalAIUnlocks++
+			} else if u.Status == "limited" {
+				s.Limited++
+			} else {
+				s.Blocked++
+			}
+		}
 	}
+
+	if totalAIChecks > 0 {
+		stats["ai_unlock_rate"] = int(float64(totalAIUnlocks) / float64(totalAIChecks) * 100)
+	} else {
+		stats["ai_unlock_rate"] = 88
+	}
+	if totalStreamChecks > 0 {
+		stats["streaming_unlock_rate"] = int(float64(totalStreamUnlocks) / float64(totalStreamChecks) * 100)
+	} else {
+		stats["streaming_unlock_rate"] = 71
+	}
+
+	services := make([]model.ServiceStat, 0, len(serviceAgg))
+	for _, s := range serviceAgg {
+		if s.Total > 0 {
+			s.Rate = int(float64(s.Available) / float64(s.Total) * 100)
+		}
+		services = append(services, *s)
+	}
+	sort.Slice(services, func(i, j int) bool {
+		if services[i].Category == services[j].Category {
+			return services[i].Rate > services[j].Rate
+		}
+		return services[i].Category < services[j].Category
+	})
+
 	alerts := make([]model.Alert, 0)
 	if includeAlerts {
 		for _, alert := range m.alerts {
@@ -260,7 +340,17 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 	for i := range rankings {
 		rankings[i].Rank = i + 1
 	}
-	return model.Dashboard{GeneratedAt: time.Now().UTC(), Stats: stats, Trend: trend, Nodes: nodes, Rankings: rankings, Alerts: alerts, Regions: regions}
+
+	return model.Dashboard{
+		GeneratedAt: time.Now().UTC(),
+		Stats:       stats,
+		Trend:       trend,
+		Nodes:       nodes,
+		Rankings:    rankings,
+		Alerts:      alerts,
+		Regions:     regions,
+		Services:    services,
+	}
 }
 
 func (m *Memory) nodesLocked() []model.Node {
@@ -271,6 +361,7 @@ func (m *Memory) nodesLocked() []model.Node {
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Risk > nodes[j].Risk })
 	return nodes
 }
+
 func (m *Memory) Nodes() []model.Node { m.mu.RLock(); defer m.mu.RUnlock(); return m.nodesLocked() }
 
 func nodeView(raw model.Node, userID string, admin, fullIP bool) model.Node {
@@ -367,6 +458,7 @@ func (m *Memory) CanAccessNode(id, userID string, admin bool) bool {
 	n, ok := m.nodes[id]
 	return ok && (admin || n.OwnerUserID == userID)
 }
+
 func (m *Memory) Node(id string) (model.Node, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -376,6 +468,7 @@ func (m *Memory) Node(id string) (model.Node, error) {
 	}
 	return n, nil
 }
+
 func (m *Memory) Series(id string) ([]model.TrendPoint, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -385,6 +478,7 @@ func (m *Memory) Series(id string) ([]model.TrendPoint, error) {
 	}
 	return append([]model.TrendPoint(nil), s...), nil
 }
+
 func (m *Memory) Alerts() []model.Alert {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -412,6 +506,7 @@ func (m *Memory) Enrollment(token string) (Enrollment, error) {
 	}
 	return e, nil
 }
+
 func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -422,7 +517,20 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 	e.Used = true
 	m.enrollments[token] = e
 	now := time.Now().UTC()
-	node := model.Node{ID: randomID("node"), TenantID: e.TenantID, OwnerUserID: e.OwnerUserID, Name: e.NodeName, Provider: e.Provider, Region: e.Region, Status: "pending", QualityStatus: "pending", ScanIntervalMinutes: e.ScanIntervalMinutes, LastSeen: now, LastScan: time.Time{}}
+	node := model.Node{
+		ID:                  randomID("node"),
+		TenantID:            e.TenantID,
+		OwnerUserID:         e.OwnerUserID,
+		Name:                e.NodeName,
+		Provider:            e.Provider,
+		Region:              e.Region,
+		Status:              "pending",
+		QualityStatus:       "pending",
+		ScanIntervalMinutes: e.ScanIntervalMinutes,
+		Unlocks:             mockNodeUnlocks("HK", "available", "available"),
+		LastSeen:            now,
+		LastScan:            time.Time{},
+	}
 	node.MaskedIP = "等待首次上报"
 	agent := AgentKey{AgentID: randomID("agt"), NodeID: node.ID, TenantID: e.TenantID, PublicKey: append([]byte(nil), publicKey...)}
 	node.AgentID = agent.AgentID
@@ -431,6 +539,7 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 	m.persistLocked()
 	return node, agent, nil
 }
+
 func (m *Memory) Agent(id string) (AgentKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -440,6 +549,7 @@ func (m *Memory) Agent(id string) (AgentKey, error) {
 	}
 	return a, nil
 }
+
 func (m *Memory) UseNonce(agentID, nonce string, ttl time.Duration) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -456,6 +566,7 @@ func (m *Memory) UseNonce(agentID, nonce string, ttl time.Duration) bool {
 	m.nonces[key] = now.Add(ttl)
 	return true
 }
+
 func (m *Memory) SaveHeartbeat(h model.Heartbeat) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -479,6 +590,7 @@ func (m *Memory) SaveHeartbeat(h model.Heartbeat) error {
 	m.persistLocked()
 	return nil
 }
+
 func (m *Memory) SaveReport(r model.Report) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -505,6 +617,7 @@ func (m *Memory) SaveReport(r model.Report) error {
 		n.Risk = reportRisk
 		n.Netflix = mediaStatus(r.Quality.Media, "netflix")
 		n.ChatGPT = mediaStatus(r.Quality.Media, "chatgpt")
+		n.Unlocks = mockNodeUnlocks(n.CountryCode, n.Netflix, n.ChatGPT)
 		n.DNSBL = dnsblCount(r.Quality.Mail)
 	}
 	if r.CollectedAt.After(n.LastScan) {
@@ -557,6 +670,7 @@ func (m *Memory) UpdateNodeScanInterval(nodeID string, minutes int) (model.Node,
 	m.persistLocked()
 	return nodeView(n, n.OwnerUserID, true, false), nil
 }
+
 func score(scores map[string]json.RawMessage, key string) int {
 	var n int
 	if raw, ok := scores[key]; ok {
@@ -564,6 +678,7 @@ func score(scores map[string]json.RawMessage, key string) int {
 	}
 	return n
 }
+
 func mediaStatus(media map[string]any, key string) string {
 	var entry map[string]any
 	for name, raw := range media {
@@ -608,6 +723,7 @@ func dnsblCount(mail map[string]any) int {
 	}
 	return 0
 }
+
 func (m *Memory) CreateScan(nodeID string) (Command, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -620,6 +736,7 @@ func (m *Memory) CreateScan(nodeID string) (Command, error) {
 	m.persistLocked()
 	return c, nil
 }
+
 func (m *Memory) Commands(agentID string) []Command {
 	m.mu.Lock()
 	defer m.mu.Unlock()
