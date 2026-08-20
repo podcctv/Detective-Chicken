@@ -6,26 +6,47 @@ import (
 )
 
 type Node struct {
-	ID           string    `json:"id"`
-	TenantID     string    `json:"tenant_id"`
-	AgentID      string    `json:"agent_id,omitempty"`
-	Name         string    `json:"name"`
-	Provider     string    `json:"provider"`
-	Region       string    `json:"region"`
-	Family       int       `json:"family"`
-	ReportedIP   string    `json:"reported_ip"`
-	MaskedIP     string    `json:"masked_ip"`
-	ASN          int64     `json:"asn"`
-	Organization string    `json:"organization"`
-	CountryCode  string    `json:"country_code"`
-	Risk         int       `json:"risk"`
-	Status       string    `json:"status"`
-	Netflix      string    `json:"netflix"`
-	ChatGPT      string    `json:"chatgpt"`
-	DNSBL        int       `json:"dnsbl"`
-	IPChanged    bool      `json:"ip_changed"`
-	LastSeen     time.Time `json:"last_seen"`
-	LastScan     time.Time `json:"last_scan"`
+	ID                  string    `json:"id"`
+	TenantID            string    `json:"tenant_id"`
+	OwnerUserID         string    `json:"-"`
+	AgentID             string    `json:"agent_id,omitempty"`
+	Name                string    `json:"name"`
+	Provider            string    `json:"provider"`
+	Region              string    `json:"region"`
+	Family              int       `json:"family"`
+	Families            []int     `json:"families,omitempty"`
+	ReportedIP          string    `json:"-"`
+	MaskedIP            string    `json:"masked_ip"`
+	IPAddress           string    `json:"ip_address,omitempty"`
+	CanViewFullIP       bool      `json:"can_view_full_ip"`
+	ASN                 int64     `json:"asn"`
+	Organization        string    `json:"organization"`
+	CountryCode         string    `json:"country_code"`
+	Risk                int       `json:"risk"`
+	Status              string    `json:"status"`
+	Netflix             string    `json:"netflix"`
+	ChatGPT             string    `json:"chatgpt"`
+	DNSBL               int       `json:"dnsbl"`
+	IPChanged           bool      `json:"ip_changed"`
+	LastSeen            time.Time `json:"last_seen"`
+	LastScan            time.Time `json:"last_scan"`
+	ScanIntervalMinutes int       `json:"scan_interval_minutes"`
+	QualityStatus       string    `json:"quality_status"`
+	LastScanError       string    `json:"last_scan_error,omitempty"`
+}
+
+type User struct {
+	ID          string    `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Role        string    `json:"role"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type PublicSettings struct {
+	RegistrationEnabled bool `json:"registration_enabled"`
+	Bootstrapped        bool `json:"bootstrapped"`
 }
 
 type TrendPoint struct {
@@ -98,6 +119,43 @@ type Dashboard struct {
 	Stats       map[string]int `json:"stats"`
 	Trend       []TrendPoint   `json:"trend"`
 	Nodes       []Node         `json:"nodes"`
+	Rankings    []NodeRanking  `json:"rankings"`
 	Alerts      []Alert        `json:"alerts"`
 	Regions     map[string]int `json:"regions"`
+}
+
+type NodeRanking struct {
+	Rank     int    `json:"rank"`
+	NodeID   string `json:"node_id"`
+	Name     string `json:"name"`
+	Provider string `json:"provider"`
+	Region   string `json:"region"`
+	Quality  int    `json:"quality"`
+	Unlocks  int    `json:"unlocks"`
+	Risk     int    `json:"risk"`
+	Status   string `json:"status"`
+}
+
+type NodeDetail struct {
+	Node
+	Series          []TrendPoint      `json:"series"`
+	Alerts          []Alert           `json:"alerts"`
+	Networks        []NetworkSnapshot `json:"networks"`
+	LatestQuality   *Quality          `json:"latest_quality,omitempty"`
+	LatestCollector *Collector        `json:"latest_collector,omitempty"`
+	ReportTime      *time.Time        `json:"report_time,omitempty"`
+}
+
+type NetworkSnapshot struct {
+	Family       int       `json:"family"`
+	MaskedIP     string    `json:"masked_ip"`
+	IPAddress    string    `json:"ip_address,omitempty"`
+	ASN          int64     `json:"asn"`
+	Organization string    `json:"organization"`
+	CountryCode  string    `json:"country_code"`
+	Risk         int       `json:"risk"`
+	Netflix      string    `json:"netflix"`
+	ChatGPT      string    `json:"chatgpt"`
+	CollectedAt  time.Time `json:"collected_at"`
+	Quality      Quality   `json:"quality"`
 }

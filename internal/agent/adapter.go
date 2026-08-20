@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/podcctv/jijian/internal/model"
+	"github.com/podcctv/detective-chicken/internal/model"
 )
 
 type Adapter struct {
@@ -39,14 +39,23 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	if family == 6 {
 		flag = "-6"
 	}
-	cmd := exec.CommandContext(ctx, "bash", "-c", `curl -fsSL --proto '=https' --tlsv1.2 "$1" | bash -s -- "$2" -j -p`, "jijian-ipquality", url, flag)
+	cmd := exec.CommandContext(ctx, "bash", "-c", `curl -fsSL --proto '=https' --tlsv1.2 "$1" | bash -s -- "$2" -j -p -f`, "detective-chicken-ipquality", url, flag)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return model.Report{}, fmt.Errorf("ipquality failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+	err := cmd.Run()
+	return finishCollection(stdout.Bytes(), stderr.String(), err, family)
+}
+
+func finishCollection(stdout []byte, stderr string, runErr error, family int) (model.Report, error) {
+	report, parseErr := ParseIPQuality(stdout, family)
+	if parseErr == nil {
+		return report, nil
 	}
-	return ParseIPQuality(stdout.Bytes(), family)
+	if runErr != nil {
+		return model.Report{}, fmt.Errorf("ipquality failed: %w: %s", runErr, strings.TrimSpace(stderr))
+	}
+	return model.Report{}, parseErr
 }
 
 func ParseIPQuality(raw []byte, family int) (model.Report, error) {
@@ -58,11 +67,15 @@ func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 	if err := json.Unmarshal(raw, &upstream); err != nil {
 		return model.Report{}, fmt.Errorf("decode upstream JSON: %w", err)
 	}
+	head := mapAt(upstream, "Head")
 	info := mapAt(upstream, "Info")
 	scores := rawMap(mapAt(upstream, "Score"))
 	quality := model.Quality{ASN: int64(numberAt(info, "ASN")), Organization: stringAt(info, "Organization", "Org"), CountryCode: stringAt(info, "CountryCode", "Country"), UsageType: stringAt(mapAt(upstream, "Type"), "UsageType", "Usage"), CompanyType: stringAt(mapAt(upstream, "Type"), "CompanyType", "Company"), Scores: scores, Factors: mapAt(upstream, "Factor"), Media: mapAt(upstream, "Media"), Mail: mapAt(upstream, "Mail")}
-	reportedIP := stringAt(info, "IP", "ip")
-	return model.Report{SchemaVersion: "1.0", ReportID: newID("rpt"), CollectedAt: time.Now().UTC(), Collector: model.Collector{Name: "ipquality", AdapterVersion: Version, UpstreamVersion: stringAt(mapAt(upstream, "Head"), "Version", "version")}, Network: model.Network{Family: family, ReportedIP: reportedIP}, Quality: quality, Raw: append([]byte(nil), raw...)}, nil
+	reportedIP := stringAt(head, "IP", "ip")
+	if reportedIP == "" {
+		reportedIP = stringAt(info, "IP", "ip")
+	}
+	return model.Report{SchemaVersion: "1.0", ReportID: newID("rpt"), CollectedAt: time.Now().UTC(), Collector: model.Collector{Name: "ipquality", AdapterVersion: Version, UpstreamVersion: stringAt(head, "Version", "version")}, Network: model.Network{Family: family, ReportedIP: reportedIP}, Quality: quality, Raw: append([]byte(nil), raw...)}, nil
 }
 
 func extractJSONObject(raw []byte) []byte {

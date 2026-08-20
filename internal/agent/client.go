@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/podcctv/jijian/internal/model"
+	"github.com/podcctv/detective-chicken/internal/model"
 )
 
 const Version = "0.1.0"
@@ -33,6 +33,15 @@ type Config struct {
 type Client struct {
 	Config Config
 	HTTP   *http.Client
+}
+
+type Directive struct {
+	ScanDue             bool `json:"scan_due"`
+	ScanIntervalMinutes int  `json:"scan_interval_minutes"`
+	Commands            []struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	} `json:"commands"`
 }
 
 func Enroll(serverURL, token, configPath string) (Config, error) {
@@ -137,9 +146,25 @@ func (c *Client) signed(method, path string, payload any) (*http.Response, error
 	return httpClient.Do(req)
 }
 
-func (c *Client) Heartbeat() error {
-	h := model.Heartbeat{AgentID: c.Config.AgentID, NodeID: c.Config.NodeID, ObservedAt: time.Now().UTC(), AgentVersion: Version, Status: map[string]any{"state": "ready"}}
-	return c.post("/api/v1/heartbeats", h)
+func (c *Client) Heartbeat(status map[string]any) (Directive, error) {
+	if status == nil {
+		status = map[string]any{"state": "ready"}
+	}
+	h := model.Heartbeat{AgentID: c.Config.AgentID, NodeID: c.Config.NodeID, ObservedAt: time.Now().UTC(), AgentVersion: Version, Status: status}
+	res, err := c.signed(http.MethodPost, "/api/v1/heartbeats", h)
+	if err != nil {
+		return Directive{}, err
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return Directive{}, fmt.Errorf("server returned %s: %s", res.Status, body)
+	}
+	var directive Directive
+	if err := json.Unmarshal(body, &directive); err != nil {
+		return Directive{}, err
+	}
+	return directive, nil
 }
 func (c *Client) Upload(report model.Report) error {
 	report.AgentID = c.Config.AgentID

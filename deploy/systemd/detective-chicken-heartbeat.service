@@ -1,0 +1,9 @@
+[Unit]
+Description=Detective Chicken agent heartbeat
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/detective-chicken-agent heartbeat
+User=root

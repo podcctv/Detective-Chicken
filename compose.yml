@@ -3,11 +3,15 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      JIJIAN_ADDR: ":8080"
+      DETECTIVE_CHICKEN_ADDR: ":8080"
+      DETECTIVE_CHICKEN_DATA_FILE: "/data/state.json"
+      DETECTIVE_CHICKEN_AGENT_DIR: "/usr/local/share/detective-chicken"
+    volumes:
+      - detective_data:/data
     expose:
       - "8080"
     healthcheck:
-      test: ["CMD", "/usr/local/bin/jijian-server", "-healthcheck"]
+      test: ["CMD", "/usr/local/bin/detective-chicken-server", "-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -25,17 +29,18 @@ services:
     profiles: ["production-data"]
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-jijian}
-      POSTGRES_USER: ${POSTGRES_USER:-jijian}
+      POSTGRES_DB: ${POSTGRES_DB:-detective_chicken}
+      POSTGRES_USER: ${POSTGRES_USER:-detective_chicken}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-before-production}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jijian} -d ${POSTGRES_DB:-jijian}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-detective_chicken} -d ${POSTGRES_DB:-detective_chicken}"]
       interval: 10s
       timeout: 5s
       retries: 10
 
 volumes:
   postgres_data:
+  detective_data:

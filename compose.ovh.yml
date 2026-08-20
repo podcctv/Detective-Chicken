@@ -1,0 +1,50 @@
+name: detective-chicken
+
+services:
+  api:
+    build:
+      context: .
+    restart: unless-stopped
+    environment:
+      DETECTIVE_CHICKEN_ADDR: ":8080"
+      DETECTIVE_CHICKEN_DATA_FILE: "/data/state.json"
+      DETECTIVE_CHICKEN_PUBLIC_URL: "https://detective.428048.xyz"
+      DETECTIVE_CHICKEN_COOKIE_SECURE: "true"
+      DETECTIVE_CHICKEN_AGENT_DIR: "/usr/local/share/detective-chicken"
+    volumes:
+      - detective_data:/data
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/detective-chicken-server", "-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  web:
+    build:
+      context: ./web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "80"
+    networks:
+      default: {}
+      caddy:
+        aliases:
+          - detective-chicken-web
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+networks:
+  caddy:
+    external: true
+    name: pt-suite_default
+
+volumes:
+  detective_data:

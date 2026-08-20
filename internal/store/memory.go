@@ -2,18 +2,24 @@ package store
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/netip"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/podcctv/jijian/internal/model"
+	"github.com/podcctv/detective-chicken/internal/model"
 )
 
 var ErrNotFound = errors.New("not found")
+
+const DefaultScanIntervalMinutes = 360
 
 type AgentKey struct {
 	AgentID   string
@@ -23,13 +29,18 @@ type AgentKey struct {
 }
 
 type Enrollment struct {
-	Token     string
-	TenantID  string
-	NodeName  string
-	Provider  string
-	Region    string
-	ExpiresAt time.Time
-	Used      bool
+	Token               string
+	TenantID            string
+	OwnerUserID         string
+	NodeName            string
+	Provider            string
+	Region              string
+	OSFamily            string
+	Platform            string
+	Arch                string
+	ScanIntervalMinutes int
+	ExpiresAt           time.Time
+	Used                bool
 }
 
 type Command struct {
@@ -39,15 +50,21 @@ type Command struct {
 }
 
 type Memory struct {
-	mu          sync.RWMutex
-	nodes       map[string]model.Node
-	series      map[string][]model.TrendPoint
-	alerts      []model.Alert
-	agents      map[string]AgentKey
-	enrollments map[string]Enrollment
-	nonces      map[string]time.Time
-	reports     map[string]model.Report
-	commands    map[string][]Command
+	mu                  sync.RWMutex
+	nodes               map[string]model.Node
+	series              map[string][]model.TrendPoint
+	alerts              []model.Alert
+	agents              map[string]AgentKey
+	enrollments         map[string]Enrollment
+	nonces              map[string]time.Time
+	reports             map[string]model.Report
+	commands            map[string][]Command
+	users               map[string]UserAccount
+	usernames           map[string]string
+	sessions            map[string]Session
+	passwordResets      map[string]PasswordReset
+	registrationEnabled bool
+	dataPath            string
 }
 
 func NewMemory(seed bool) *Memory {
@@ -55,7 +72,9 @@ func NewMemory(seed bool) *Memory {
 		nodes: make(map[string]model.Node), series: make(map[string][]model.TrendPoint),
 		agents: make(map[string]AgentKey), enrollments: make(map[string]Enrollment),
 		nonces: make(map[string]time.Time), reports: make(map[string]model.Report),
-		commands: make(map[string][]Command),
+		commands: make(map[string][]Command), users: make(map[string]UserAccount),
+		usernames: make(map[string]string), sessions: make(map[string]Session),
+		passwordResets: make(map[string]PasswordReset),
 	}
 	if seed {
 		m.seed()
@@ -69,17 +88,21 @@ func randomID(prefix string) string {
 	return prefix + "_" + hex.EncodeToString(b)
 }
 
-func maskIP(ip string) string {
+func MaskIP(ip string) string {
 	if strings.Contains(ip, ":") {
-		parts := strings.Split(ip, ":")
-		if len(parts) > 3 {
-			return strings.Join(parts[:3], ":") + ":*"
+		if addr, err := netip.ParseAddr(ip); err == nil && addr.Is6() {
+			raw := addr.As16()
+			parts := make([]string, 0, 8)
+			for i := 0; i < 6; i++ {
+				parts = append(parts, strconv.FormatUint(uint64(binary.BigEndian.Uint16(raw[i*2:i*2+2])), 16))
+			}
+			return strings.Join(parts, ":") + ":*:*"
 		}
-		return ip
+		return "*:*"
 	}
 	parts := strings.Split(ip, ".")
 	if len(parts) == 4 {
-		return strings.Join(parts[:3], ".") + ".*"
+		return strings.Join(parts[:2], ".") + ".*.*"
 	}
 	return ip
 }
@@ -95,7 +118,7 @@ func (m *Memory) seed() {
 		{ID: "node_ams_06", TenantID: "tenant_demo", Name: "NL-AMS-06", Provider: "GreenCloud", Region: "阿姆斯特丹", Family: 4, ReportedIP: "185.22.153.44", ASN: 49544, Organization: "iFog GmbH", CountryCode: "NL", Risk: 22, Status: "offline", Netflix: "available", ChatGPT: "available", DNSBL: 0, LastSeen: now.Add(-19 * time.Minute), LastScan: now.Add(-13 * time.Hour)},
 	}
 	for i, n := range seedNodes {
-		n.MaskedIP = maskIP(n.ReportedIP)
+		n.MaskedIP = MaskIP(n.ReportedIP)
 		m.nodes[n.ID] = n
 		points := make([]model.TrendPoint, 0, 20)
 		for d := 19; d >= 0; d-- {
@@ -134,8 +157,11 @@ func (m *Memory) Dashboard() model.Dashboard {
 		if n.IPChanged {
 			stats["ip_changes"]++
 		}
-		if n.Netflix != "available" || n.ChatGPT != "available" {
-			stats["media_degraded"]++
+		if !n.LastScan.IsZero() {
+			stats["scanned"]++
+			if n.Netflix != "available" || n.ChatGPT != "available" {
+				stats["media_degraded"]++
+			}
 		}
 		if n.DNSBL > 0 {
 			stats["dnsbl_added"]++
@@ -149,6 +175,94 @@ func (m *Memory) Dashboard() model.Dashboard {
 	return model.Dashboard{GeneratedAt: time.Now().UTC(), Stats: stats, Trend: trend, Nodes: nodes, Alerts: alerts, Regions: regions}
 }
 
+func (m *Memory) DashboardFor(userID string, admin bool) model.Dashboard {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	nodes := m.nodesForLocked(userID, admin)
+	return m.dashboardForNodesLocked(nodes, true)
+}
+
+func (m *Memory) PublicDashboard() model.Dashboard {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	nodes := make([]model.Node, 0, len(m.nodes))
+	for _, raw := range m.nodes {
+		view := nodeView(raw, "", false, false)
+		view.AgentID = ""
+		view.TenantID = ""
+		nodes = append(nodes, view)
+	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Risk < nodes[j].Risk })
+	return m.dashboardForNodesLocked(nodes, false)
+}
+
+func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool) model.Dashboard {
+	stats := map[string]int{"total": len(nodes)}
+	regions := map[string]int{}
+	allowed := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		allowed[n.ID] = true
+		if n.Status != "offline" {
+			stats["online"]++
+		}
+		if n.Status == "alert" || n.Status == "warning" {
+			stats["abnormal"]++
+		}
+		if n.Risk >= 60 {
+			stats["high_risk"]++
+		}
+		if n.IPChanged {
+			stats["ip_changes"]++
+		}
+		if !n.LastScan.IsZero() {
+			stats["scanned"]++
+			if n.Netflix != "available" || n.ChatGPT != "available" {
+				stats["media_degraded"]++
+			}
+		}
+		if n.DNSBL > 0 {
+			stats["dnsbl_added"]++
+		}
+		regions[n.CountryCode]++
+	}
+	alerts := make([]model.Alert, 0)
+	if includeAlerts {
+		for _, alert := range m.alerts {
+			if allowed[alert.NodeID] {
+				alerts = append(alerts, alert)
+			}
+		}
+	}
+	var trend []model.TrendPoint
+	if len(nodes) > 0 {
+		trend = append(trend, m.series[nodes[0].ID]...)
+	}
+	rankings := make([]model.NodeRanking, 0, len(nodes))
+	for _, n := range nodes {
+		if n.LastScan.IsZero() {
+			continue
+		}
+		unlocks := 0
+		if n.Netflix == "available" {
+			unlocks++
+		}
+		if n.ChatGPT == "available" {
+			unlocks++
+		}
+		rankings = append(rankings, model.NodeRanking{NodeID: n.ID, Name: n.Name, Provider: n.Provider, Region: n.Region, Quality: max(0, 100-n.Risk), Unlocks: unlocks, Risk: n.Risk, Status: n.Status})
+	}
+	sort.SliceStable(rankings, func(i, j int) bool {
+		if rankings[i].Quality == rankings[j].Quality {
+			return rankings[i].Unlocks > rankings[j].Unlocks
+		}
+		return rankings[i].Quality > rankings[j].Quality
+	})
+	for i := range rankings {
+		rankings[i].Rank = i + 1
+	}
+	return model.Dashboard{GeneratedAt: time.Now().UTC(), Stats: stats, Trend: trend, Nodes: nodes, Rankings: rankings, Alerts: alerts, Regions: regions}
+}
+
 func (m *Memory) nodesLocked() []model.Node {
 	nodes := make([]model.Node, 0, len(m.nodes))
 	for _, n := range m.nodes {
@@ -158,6 +272,101 @@ func (m *Memory) nodesLocked() []model.Node {
 	return nodes
 }
 func (m *Memory) Nodes() []model.Node { m.mu.RLock(); defer m.mu.RUnlock(); return m.nodesLocked() }
+
+func nodeView(raw model.Node, userID string, admin, fullIP bool) model.Node {
+	view := raw
+	if view.ScanIntervalMinutes == 0 {
+		view.ScanIntervalMinutes = DefaultScanIntervalMinutes
+	}
+	view.CanViewFullIP = admin || (userID != "" && raw.OwnerUserID == userID)
+	view.IPAddress = raw.MaskedIP
+	if fullIP && view.CanViewFullIP {
+		view.IPAddress = raw.ReportedIP
+	}
+	return view
+}
+
+func (m *Memory) nodesForLocked(userID string, admin bool) []model.Node {
+	nodes := make([]model.Node, 0, len(m.nodes))
+	for _, raw := range m.nodes {
+		if !admin && raw.OwnerUserID != userID {
+			continue
+		}
+		nodes = append(nodes, nodeView(raw, userID, admin, false))
+	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Risk > nodes[j].Risk })
+	return nodes
+}
+
+func (m *Memory) NodesFor(userID string, admin bool) []model.Node {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.nodesForLocked(userID, admin)
+}
+
+func (m *Memory) NodeDetailFor(id, userID string, admin, fullIP bool) (model.NodeDetail, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	raw, ok := m.nodes[id]
+	if !ok || (!admin && raw.OwnerUserID != userID) {
+		return model.NodeDetail{}, ErrNotFound
+	}
+	detail := model.NodeDetail{
+		Node:     nodeView(raw, userID, admin, fullIP),
+		Series:   append([]model.TrendPoint{}, m.series[id]...),
+		Alerts:   make([]model.Alert, 0),
+		Networks: make([]model.NetworkSnapshot, 0),
+	}
+	for _, alert := range m.alerts {
+		if alert.NodeID == id {
+			detail.Alerts = append(detail.Alerts, alert)
+		}
+	}
+	var latest *model.Report
+	latestByFamily := map[int]model.Report{}
+	for _, report := range m.reports {
+		if report.NodeID != id {
+			continue
+		}
+		if previous, exists := latestByFamily[report.Network.Family]; !exists || report.CollectedAt.After(previous.CollectedAt) {
+			latestByFamily[report.Network.Family] = report
+		}
+		if latest == nil || report.CollectedAt.After(latest.CollectedAt) {
+			copy := report
+			latest = &copy
+		}
+	}
+	for _, family := range []int{4, 6} {
+		report, ok := latestByFamily[family]
+		if !ok {
+			continue
+		}
+		snapshot := model.NetworkSnapshot{Family: family, MaskedIP: MaskIP(report.Network.ReportedIP), ASN: report.Quality.ASN, Organization: report.Quality.Organization, CountryCode: report.Quality.CountryCode, Risk: score(report.Quality.Scores, "ipqs"), Netflix: mediaStatus(report.Quality.Media, "netflix"), ChatGPT: mediaStatus(report.Quality.Media, "chatgpt"), CollectedAt: report.CollectedAt, Quality: report.Quality}
+		if fullIP && detail.CanViewFullIP {
+			snapshot.IPAddress = report.Network.ReportedIP
+			if family == detail.Family {
+				detail.IPAddress = report.Network.ReportedIP
+			}
+		}
+		detail.Networks = append(detail.Networks, snapshot)
+	}
+	if latest != nil {
+		quality := latest.Quality
+		collector := latest.Collector
+		at := latest.CollectedAt
+		detail.LatestQuality = &quality
+		detail.LatestCollector = &collector
+		detail.ReportTime = &at
+	}
+	return detail, nil
+}
+
+func (m *Memory) CanAccessNode(id, userID string, admin bool) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n, ok := m.nodes[id]
+	return ok && (admin || n.OwnerUserID == userID)
+}
 func (m *Memory) Node(id string) (model.Node, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -182,12 +391,26 @@ func (m *Memory) Alerts() []model.Alert {
 	return append([]model.Alert(nil), m.alerts...)
 }
 
-func (m *Memory) CreateEnrollment(tenantID, name, provider, region string) Enrollment {
+func (m *Memory) CreateEnrollment(tenantID, ownerUserID, name, provider, region, osFamily, platform, arch string, scanIntervalMinutes int) Enrollment {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	e := Enrollment{Token: randomID("et"), TenantID: tenantID, NodeName: name, Provider: provider, Region: region, ExpiresAt: time.Now().UTC().Add(10 * time.Minute)}
+	if scanIntervalMinutes == 0 {
+		scanIntervalMinutes = DefaultScanIntervalMinutes
+	}
+	e := Enrollment{Token: randomID("et"), TenantID: tenantID, OwnerUserID: ownerUserID, NodeName: name, Provider: provider, Region: region, OSFamily: osFamily, Platform: platform, Arch: arch, ScanIntervalMinutes: scanIntervalMinutes, ExpiresAt: time.Now().UTC().Add(10 * time.Minute)}
 	m.enrollments[e.Token] = e
+	m.persistLocked()
 	return e
+}
+
+func (m *Memory) Enrollment(token string) (Enrollment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	e, ok := m.enrollments[token]
+	if !ok || e.Used || time.Now().After(e.ExpiresAt) {
+		return Enrollment{}, ErrNotFound
+	}
+	return e, nil
 }
 func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey, error) {
 	m.mu.Lock()
@@ -199,12 +422,13 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 	e.Used = true
 	m.enrollments[token] = e
 	now := time.Now().UTC()
-	node := model.Node{ID: randomID("node"), TenantID: e.TenantID, Name: e.NodeName, Provider: e.Provider, Region: e.Region, Status: "pending", LastSeen: now, LastScan: time.Time{}}
+	node := model.Node{ID: randomID("node"), TenantID: e.TenantID, OwnerUserID: e.OwnerUserID, Name: e.NodeName, Provider: e.Provider, Region: e.Region, Status: "pending", QualityStatus: "pending", ScanIntervalMinutes: e.ScanIntervalMinutes, LastSeen: now, LastScan: time.Time{}}
 	node.MaskedIP = "等待首次上报"
 	agent := AgentKey{AgentID: randomID("agt"), NodeID: node.ID, TenantID: e.TenantID, PublicKey: append([]byte(nil), publicKey...)}
 	node.AgentID = agent.AgentID
 	m.nodes[node.ID] = node
 	m.agents[agent.AgentID] = agent
+	m.persistLocked()
 	return node, agent, nil
 }
 func (m *Memory) Agent(id string) (AgentKey, error) {
@@ -241,11 +465,18 @@ func (m *Memory) SaveHeartbeat(h model.Heartbeat) error {
 	}
 	n.LastSeen = h.ObservedAt
 	n.Status = "online"
+	if state, ok := h.Status["scan_state"].(string); ok && state != "" {
+		n.QualityStatus = state
+	}
+	if message, ok := h.Status["scan_error"].(string); ok {
+		n.LastScanError = message
+	}
 	if h.ReportedIP != "" {
 		n.ReportedIP = h.ReportedIP
-		n.MaskedIP = maskIP(h.ReportedIP)
+		n.MaskedIP = MaskIP(h.ReportedIP)
 	}
 	m.nodes[n.ID] = n
+	m.persistLocked()
 	return nil
 }
 func (m *Memory) SaveReport(r model.Report) error {
@@ -259,22 +490,72 @@ func (m *Memory) SaveReport(r model.Report) error {
 		return ErrNotFound
 	}
 	n.AgentID = r.AgentID
-	n.Family = r.Network.Family
-	n.ReportedIP = r.Network.ReportedIP
-	n.MaskedIP = maskIP(r.Network.ReportedIP)
-	n.ASN = r.Quality.ASN
-	n.Organization = r.Quality.Organization
-	n.CountryCode = r.Quality.CountryCode
-	n.LastScan = r.CollectedAt
+	if !containsFamily(n.Families, r.Network.Family) {
+		n.Families = append(n.Families, r.Network.Family)
+		sort.Ints(n.Families)
+	}
+	reportRisk := score(r.Quality.Scores, "ipqs")
+	if n.Family == 0 || r.Network.Family == 4 || n.Family != 4 {
+		n.Family = r.Network.Family
+		n.ReportedIP = r.Network.ReportedIP
+		n.MaskedIP = MaskIP(r.Network.ReportedIP)
+		n.ASN = r.Quality.ASN
+		n.Organization = r.Quality.Organization
+		n.CountryCode = r.Quality.CountryCode
+		n.Risk = reportRisk
+		n.Netflix = mediaStatus(r.Quality.Media, "netflix")
+		n.ChatGPT = mediaStatus(r.Quality.Media, "chatgpt")
+		n.DNSBL = dnsblCount(r.Quality.Mail)
+	}
+	if r.CollectedAt.After(n.LastScan) {
+		n.LastScan = r.CollectedAt
+	}
 	n.LastSeen = time.Now().UTC()
 	n.Status = "online"
-	n.Risk = score(r.Quality.Scores, "ipqs")
-	n.Netflix = mediaStatus(r.Quality.Media, "netflix")
-	n.ChatGPT = mediaStatus(r.Quality.Media, "chatgpt")
+	n.QualityStatus = "ready"
+	n.LastScanError = ""
 	m.nodes[n.ID] = n
 	m.reports[r.ReportID] = r
-	m.series[n.ID] = append(m.series[n.ID], model.TrendPoint{At: r.CollectedAt, Risk: n.Risk, IPQS: n.Risk})
+	m.series[n.ID] = append(m.series[n.ID], model.TrendPoint{At: r.CollectedAt, Risk: reportRisk, IPQS: reportRisk})
+	m.persistLocked()
 	return nil
+}
+
+func containsFamily(families []int, family int) bool {
+	for _, candidate := range families {
+		if candidate == family {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Memory) ScanDirective(nodeID string) (bool, int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n, ok := m.nodes[nodeID]
+	if !ok {
+		return false, 0, ErrNotFound
+	}
+	interval := n.ScanIntervalMinutes
+	if interval == 0 {
+		interval = DefaultScanIntervalMinutes
+	}
+	due := n.LastScan.IsZero() || time.Since(n.LastScan) >= time.Duration(interval)*time.Minute
+	return due, interval, nil
+}
+
+func (m *Memory) UpdateNodeScanInterval(nodeID string, minutes int) (model.Node, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n, ok := m.nodes[nodeID]
+	if !ok {
+		return model.Node{}, ErrNotFound
+	}
+	n.ScanIntervalMinutes = minutes
+	m.nodes[nodeID] = n
+	m.persistLocked()
+	return nodeView(n, n.OwnerUserID, true, false), nil
 }
 func score(scores map[string]json.RawMessage, key string) int {
 	var n int
@@ -284,12 +565,48 @@ func score(scores map[string]json.RawMessage, key string) int {
 	return n
 }
 func mediaStatus(media map[string]any, key string) string {
-	v, ok := media[key].(map[string]any)
-	if !ok {
-		return "unknown"
+	var entry map[string]any
+	for name, raw := range media {
+		if strings.EqualFold(name, key) {
+			entry, _ = raw.(map[string]any)
+			break
+		}
 	}
-	s, _ := v["status"].(string)
-	return s
+	for name, raw := range entry {
+		if !strings.EqualFold(name, "status") {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
+		switch status {
+		case "available", "unlocked", "yes", "解锁", "可用", "原生":
+			return "available"
+		case "limited", "partial", "仅自制", "部分解锁":
+			return "limited"
+		case "blocked", "no", "不可用", "未解锁", "屏蔽":
+			return "blocked"
+		}
+	}
+	return "unknown"
+}
+
+func dnsblCount(mail map[string]any) int {
+	for name, raw := range mail {
+		if !strings.EqualFold(name, "DNSBlacklist") {
+			continue
+		}
+		blacklist, _ := raw.(map[string]any)
+		for field, value := range blacklist {
+			if strings.EqualFold(field, "Blacklisted") {
+				switch count := value.(type) {
+				case float64:
+					return int(count)
+				case int:
+					return count
+				}
+			}
+		}
+	}
+	return 0
 }
 func (m *Memory) CreateScan(nodeID string) (Command, error) {
 	m.mu.Lock()
@@ -300,6 +617,7 @@ func (m *Memory) CreateScan(nodeID string) (Command, error) {
 	}
 	c := Command{ID: randomID("cmd"), Type: "scan", CreatedAt: time.Now().UTC()}
 	m.commands[n.AgentID] = append(m.commands[n.AgentID], c)
+	m.persistLocked()
 	return c, nil
 }
 func (m *Memory) Commands(agentID string) []Command {
@@ -307,5 +625,6 @@ func (m *Memory) Commands(agentID string) []Command {
 	defer m.mu.Unlock()
 	c := append([]Command(nil), m.commands[agentID]...)
 	m.commands[agentID] = nil
+	m.persistLocked()
 	return c
 }
