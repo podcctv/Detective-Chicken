@@ -413,7 +413,7 @@ func (m *Memory) PublicDashboard() model.Dashboard {
 	defer m.mu.RUnlock()
 	nodes := make([]model.Node, 0, len(m.nodes))
 	for _, raw := range m.nodes {
-		view := nodeView(raw, "", false, false)
+		view := m.nodeView(raw, "", false, false)
 		view.AgentID = ""
 		view.TenantID = ""
 		nodes = append(nodes, view)
@@ -421,6 +421,7 @@ func (m *Memory) PublicDashboard() model.Dashboard {
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Risk < nodes[j].Risk })
 	return m.dashboardForNodesLocked(nodes, false)
 }
+
 
 func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool) model.Dashboard {
 	stats := map[string]int{"total": len(nodes)}
