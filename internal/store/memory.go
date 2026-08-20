@@ -278,8 +278,56 @@ func computeRisk(scores map[string]json.RawMessage) int {
 	return maxRisk
 }
 
+func fallbackGeoCoordinates(n *model.Node) {
+
+	if n.CountryCode == "" {
+		if n.Unlocks.Streaming != nil && n.Unlocks.Streaming["netflix"].Region != "" {
+			n.CountryCode = n.Unlocks.Streaming["netflix"].Region
+		} else if n.Unlocks.AI != nil && n.Unlocks.AI["chatgpt"].Region != "" {
+			n.CountryCode = n.Unlocks.AI["chatgpt"].Region
+		} else {
+			regUpper := strings.ToUpper(n.Region)
+			if strings.Contains(regUpper, "HK") || strings.Contains(n.Region, "香港") {
+				n.CountryCode = "HK"
+			} else if strings.Contains(regUpper, "TW") || strings.Contains(regUpper, "TAIWAN") || strings.Contains(n.Region, "台湾") {
+				n.CountryCode = "TW"
+			} else if strings.Contains(regUpper, "JP") || strings.Contains(n.Region, "日本") || strings.Contains(n.Region, "东京") {
+				n.CountryCode = "JP"
+			} else if strings.Contains(regUpper, "SG") || strings.Contains(n.Region, "新加坡") {
+				n.CountryCode = "SG"
+			} else if strings.Contains(regUpper, "US") || strings.Contains(n.Region, "美国") || strings.Contains(n.Region, "洛杉矶") {
+				n.CountryCode = "US"
+			} else if strings.Contains(regUpper, "DE") || strings.Contains(n.Region, "德国") || strings.Contains(n.Region, "法兰克福") {
+				n.CountryCode = "DE"
+			} else if strings.Contains(regUpper, "NL") || strings.Contains(n.Region, "荷兰") || strings.Contains(n.Region, "阿姆斯特丹") {
+				n.CountryCode = "NL"
+			}
+		}
+	}
+	if n.Latitude == 0 && n.Longitude == 0 {
+		switch n.CountryCode {
+		case "HK":
+			n.Latitude, n.Longitude = 22.3193, 114.1694
+		case "TW":
+			n.Latitude, n.Longitude = 25.0330, 121.5654
+		case "JP":
+			n.Latitude, n.Longitude = 35.6762, 139.6503
+		case "SG":
+			n.Latitude, n.Longitude = 1.3521, 103.8198
+		case "US":
+			n.Latitude, n.Longitude = 37.7749, -122.4194
+		case "DE":
+			n.Latitude, n.Longitude = 50.1109, 8.6821
+		case "NL":
+			n.Latitude, n.Longitude = 52.3676, 4.9041
+		case "GB", "UK":
+			n.Latitude, n.Longitude = 51.5074, -0.1278
+		}
+	}
+}
 
 func (m *Memory) seed() {
+
 	now := time.Now().UTC()
 	seedNodes := []model.Node{
 		{ID: "node_hkg_01", TenantID: "tenant_demo", Name: "HK-CMI-01", Provider: "DMIT", Region: "香港", Family: 4, ReportedIP: "103.145.12.81", ASN: 906, Organization: "DMIT Cloud Services", CountryCode: "HK", Latitude: 22.3193, Longitude: 114.1694, Risk: 18, Status: "online", Netflix: "available", ChatGPT: "available", Unlocks: model.NodeUnlocks{}, DNSBL: 0, LastSeen: now.Add(-42 * time.Second), LastScan: now.Add(-2 * time.Hour)},
@@ -349,7 +397,9 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 	totalStreamUnlocks := 0
 	totalStreamChecks := 0
 
-	for _, n := range nodes {
+	for i := range nodes {
+		fallbackGeoCoordinates(&nodes[i])
+		n := nodes[i]
 		allowed[n.ID] = true
 		if n.Status != "offline" {
 			stats["online"]++
@@ -372,7 +422,9 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 		if n.DNSBL > 0 {
 			stats["dnsbl_added"]++
 		}
-		regions[n.CountryCode]++
+		if n.CountryCode != "" {
+			regions[n.CountryCode]++
+		}
 
 		// Aggregate unlock service stats
 		for _, u := range n.Unlocks.Streaming {
@@ -414,13 +466,14 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 	if totalAIChecks > 0 {
 		stats["ai_unlock_rate"] = int(float64(totalAIUnlocks) / float64(totalAIChecks) * 100)
 	} else {
-		stats["ai_unlock_rate"] = 88
+		stats["ai_unlock_rate"] = 100
 	}
 	if totalStreamChecks > 0 {
 		stats["streaming_unlock_rate"] = int(float64(totalStreamUnlocks) / float64(totalStreamChecks) * 100)
 	} else {
-		stats["streaming_unlock_rate"] = 71
+		stats["streaming_unlock_rate"] = 100
 	}
+
 
 	services := make([]model.ServiceStat, 0, len(serviceAgg))
 	for _, s := range serviceAgg {
