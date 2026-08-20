@@ -282,13 +282,14 @@ func computeRisk(scores map[string]json.RawMessage) int {
 func (m *Memory) seed() {
 	now := time.Now().UTC()
 	seedNodes := []model.Node{
-		{ID: "node_hkg_01", TenantID: "tenant_demo", Name: "HK-CMI-01", Provider: "DMIT", Region: "香港", Family: 4, ReportedIP: "103.145.12.81", ASN: 906, Organization: "DMIT Cloud Services", CountryCode: "HK", Latitude: 22.3193, Longitude: 114.1694, Risk: 18, Status: "online", Netflix: "available", ChatGPT: "available", Unlocks: mockNodeUnlocks("HK", "available", "available"), DNSBL: 0, LastSeen: now.Add(-42 * time.Second), LastScan: now.Add(-2 * time.Hour)},
-		{ID: "node_lax_02", TenantID: "tenant_demo", Name: "US-LAX-02", Provider: "RackNerd", Region: "洛杉矶", Family: 4, ReportedIP: "198.51.100.27", ASN: 62240, Organization: "Clouvider Limited", CountryCode: "US", Latitude: 34.0522, Longitude: -118.2437, Risk: 72, Status: "alert", Netflix: "limited", ChatGPT: "available", Unlocks: mockNodeUnlocks("US", "limited", "available"), DNSBL: 8, IPChanged: true, LastSeen: now.Add(-2 * time.Minute), LastScan: now.Add(-28 * time.Minute)},
-		{ID: "node_nrt_03", TenantID: "tenant_demo", Name: "JP-NRT-03", Provider: "Vultr", Region: "东京", Family: 4, ReportedIP: "45.76.201.19", ASN: 20473, Organization: "The Constant Company", CountryCode: "JP", Latitude: 35.6762, Longitude: 139.6503, Risk: 11, Status: "online", Netflix: "available", ChatGPT: "available", Unlocks: mockNodeUnlocks("JP", "available", "available"), DNSBL: 0, LastSeen: now.Add(-51 * time.Second), LastScan: now.Add(-6 * time.Hour)},
-		{ID: "node_fra_04", TenantID: "tenant_demo", Name: "DE-FRA-04", Provider: "Hetzner", Region: "法兰克福", Family: 6, ReportedIP: "2a01:4f8:c2c:17::1", ASN: 24940, Organization: "Hetzner Online", CountryCode: "DE", Latitude: 50.1109, Longitude: 8.6821, Risk: 34, Status: "online", Netflix: "blocked", ChatGPT: "available", Unlocks: mockNodeUnlocks("DE", "blocked", "available"), DNSBL: 1, LastSeen: now.Add(-74 * time.Second), LastScan: now.Add(-4 * time.Hour)},
-		{ID: "node_sin_05", TenantID: "tenant_demo", Name: "SG-SIN-05", Provider: "LightNode", Region: "新加坡", Family: 4, ReportedIP: "172.104.51.233", ASN: 63949, Organization: "Akamai Connected Cloud", CountryCode: "SG", Latitude: 1.3521, Longitude: 103.8198, Risk: 48, Status: "warning", Netflix: "available", ChatGPT: "blocked", Unlocks: mockNodeUnlocks("SG", "available", "blocked"), DNSBL: 3, LastSeen: now.Add(-4 * time.Minute), LastScan: now.Add(-11 * time.Hour)},
-		{ID: "node_ams_06", TenantID: "tenant_demo", Name: "NL-AMS-06", Provider: "GreenCloud", Region: "阿姆斯特丹", Family: 4, ReportedIP: "185.22.153.44", ASN: 49544, Organization: "iFog GmbH", CountryCode: "NL", Latitude: 52.3676, Longitude: 4.9041, Risk: 22, Status: "offline", Netflix: "available", ChatGPT: "available", Unlocks: mockNodeUnlocks("NL", "available", "available"), DNSBL: 0, LastSeen: now.Add(-19 * time.Minute), LastScan: now.Add(-13 * time.Hour)},
+		{ID: "node_hkg_01", TenantID: "tenant_demo", Name: "HK-CMI-01", Provider: "DMIT", Region: "香港", Family: 4, ReportedIP: "103.145.12.81", ASN: 906, Organization: "DMIT Cloud Services", CountryCode: "HK", Latitude: 22.3193, Longitude: 114.1694, Risk: 18, Status: "online", Netflix: "available", ChatGPT: "available", Unlocks: model.NodeUnlocks{}, DNSBL: 0, LastSeen: now.Add(-42 * time.Second), LastScan: now.Add(-2 * time.Hour)},
+		{ID: "node_lax_02", TenantID: "tenant_demo", Name: "US-LAX-02", Provider: "RackNerd", Region: "洛杉矶", Family: 4, ReportedIP: "198.51.100.27", ASN: 62240, Organization: "Clouvider Limited", CountryCode: "US", Latitude: 34.0522, Longitude: -118.2437, Risk: 72, Status: "alert", Netflix: "limited", ChatGPT: "available", Unlocks: model.NodeUnlocks{}, DNSBL: 8, IPChanged: true, LastSeen: now.Add(-2 * time.Minute), LastScan: now.Add(-28 * time.Minute)},
+		{ID: "node_nrt_03", TenantID: "tenant_demo", Name: "JP-NRT-03", Provider: "Vultr", Region: "东京", Family: 4, ReportedIP: "45.76.201.19", ASN: 20473, Organization: "The Constant Company", CountryCode: "JP", Latitude: 35.6762, Longitude: 139.6503, Risk: 11, Status: "online", Netflix: "available", ChatGPT: "available", Unlocks: model.NodeUnlocks{}, DNSBL: 0, LastSeen: now.Add(-51 * time.Second), LastScan: now.Add(-6 * time.Hour)},
+		{ID: "node_fra_04", TenantID: "tenant_demo", Name: "DE-FRA-04", Provider: "Hetzner", Region: "法兰克福", Family: 6, ReportedIP: "2a01:4f8:c2c:17::1", ASN: 24940, Organization: "Hetzner Online", CountryCode: "DE", Latitude: 50.1109, Longitude: 8.6821, Risk: 34, Status: "online", Netflix: "blocked", ChatGPT: "available", Unlocks: model.NodeUnlocks{}, DNSBL: 1, LastSeen: now.Add(-74 * time.Second), LastScan: now.Add(-4 * time.Hour)},
+		{ID: "node_sin_05", TenantID: "tenant_demo", Name: "SG-SIN-05", Provider: "LightNode", Region: "新加坡", Family: 4, ReportedIP: "172.104.51.233", ASN: 63949, Organization: "Akamai Connected Cloud", CountryCode: "SG", Latitude: 1.3521, Longitude: 103.8198, Risk: 48, Status: "warning", Netflix: "available", ChatGPT: "blocked", Unlocks: model.NodeUnlocks{}, DNSBL: 3, LastSeen: now.Add(-4 * time.Minute), LastScan: now.Add(-11 * time.Hour)},
+		{ID: "node_ams_06", TenantID: "tenant_demo", Name: "NL-AMS-06", Provider: "GreenCloud", Region: "阿姆斯特丹", Family: 4, ReportedIP: "185.22.153.44", ASN: 49544, Organization: "iFog GmbH", CountryCode: "NL", Latitude: 52.3676, Longitude: 4.9041, Risk: 22, Status: "offline", Netflix: "available", ChatGPT: "available", Unlocks: model.NodeUnlocks{}, DNSBL: 0, LastSeen: now.Add(-19 * time.Minute), LastScan: now.Add(-13 * time.Hour)},
 	}
+
 	for i, n := range seedNodes {
 		n.MaskedIP = MaskIP(n.ReportedIP)
 		m.nodes[n.ID] = n
@@ -657,8 +658,9 @@ func (m *Memory) Register(token string, publicKey []byte) (model.Node, AgentKey,
 		Status:              "pending",
 		QualityStatus:       "pending",
 		ScanIntervalMinutes: e.ScanIntervalMinutes,
-		Unlocks:             mockNodeUnlocks("HK", "available", "available"),
+		Unlocks:             model.NodeUnlocks{},
 		LastSeen:            now,
+
 		LastScan:            time.Time{},
 	}
 	node.MaskedIP = "等待首次上报"

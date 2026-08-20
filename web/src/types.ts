@@ -1,5 +1,6 @@
 export type ServiceCategory = 'streaming' | 'ai' | 'social'
-export type ServiceStatus = 'available' | 'limited' | 'blocked' | 'unknown'
+export type ServiceStatus = 'available' | 'limited' | 'blocked' | 'untested' | 'unknown'
+
 
 export interface UnlockInfo {
   id: string
