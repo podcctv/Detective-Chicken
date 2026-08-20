@@ -110,12 +110,12 @@ func MaskIP(ip string) string {
 func (m *Memory) seed() {
 	now := time.Now().UTC()
 	seedNodes := []model.Node{
-		{ID: "node_hkg_01", TenantID: "tenant_demo", Name: "HK-CMI-01", Provider: "DMIT", Region: "香港", Family: 4, ReportedIP: "103.145.12.81", ASN: 906, Organization: "DMIT Cloud Services", CountryCode: "HK", Risk: 18, Status: "online", Netflix: "available", ChatGPT: "available", DNSBL: 0, LastSeen: now.Add(-42 * time.Second), LastScan: now.Add(-2 * time.Hour)},
-		{ID: "node_lax_02", TenantID: "tenant_demo", Name: "US-LAX-02", Provider: "RackNerd", Region: "洛杉矶", Family: 4, ReportedIP: "198.51.100.27", ASN: 62240, Organization: "Clouvider Limited", CountryCode: "US", Risk: 72, Status: "alert", Netflix: "limited", ChatGPT: "available", DNSBL: 8, IPChanged: true, LastSeen: now.Add(-2 * time.Minute), LastScan: now.Add(-28 * time.Minute)},
-		{ID: "node_nrt_03", TenantID: "tenant_demo", Name: "JP-NRT-03", Provider: "Vultr", Region: "东京", Family: 4, ReportedIP: "45.76.201.19", ASN: 20473, Organization: "The Constant Company", CountryCode: "JP", Risk: 11, Status: "online", Netflix: "available", ChatGPT: "available", DNSBL: 0, LastSeen: now.Add(-51 * time.Second), LastScan: now.Add(-6 * time.Hour)},
-		{ID: "node_fra_04", TenantID: "tenant_demo", Name: "DE-FRA-04", Provider: "Hetzner", Region: "法兰克福", Family: 6, ReportedIP: "2a01:4f8:c2c:17::1", ASN: 24940, Organization: "Hetzner Online", CountryCode: "DE", Risk: 34, Status: "online", Netflix: "blocked", ChatGPT: "available", DNSBL: 1, LastSeen: now.Add(-74 * time.Second), LastScan: now.Add(-4 * time.Hour)},
-		{ID: "node_sin_05", TenantID: "tenant_demo", Name: "SG-SIN-05", Provider: "LightNode", Region: "新加坡", Family: 4, ReportedIP: "172.104.51.233", ASN: 63949, Organization: "Akamai Connected Cloud", CountryCode: "SG", Risk: 48, Status: "warning", Netflix: "available", ChatGPT: "blocked", DNSBL: 3, LastSeen: now.Add(-4 * time.Minute), LastScan: now.Add(-11 * time.Hour)},
-		{ID: "node_ams_06", TenantID: "tenant_demo", Name: "NL-AMS-06", Provider: "GreenCloud", Region: "阿姆斯特丹", Family: 4, ReportedIP: "185.22.153.44", ASN: 49544, Organization: "iFog GmbH", CountryCode: "NL", Risk: 22, Status: "offline", Netflix: "available", ChatGPT: "available", DNSBL: 0, LastSeen: now.Add(-19 * time.Minute), LastScan: now.Add(-13 * time.Hour)},
+		{ID: "node_hkg_01", TenantID: "tenant_demo", Name: "HK-CMI-01", Provider: "DMIT", Region: "香港", Family: 4, ReportedIP: "103.145.12.81", ASN: 906, Organization: "DMIT Cloud Services", CountryCode: "HK", UsageType: "机房", Risk: 18, Status: "online", Netflix: "available", ChatGPT: "available", YouTube: "available", DNSBL: 0, LastSeen: now.Add(-42 * time.Second), LastScan: now.Add(-2 * time.Hour)},
+		{ID: "node_lax_02", TenantID: "tenant_demo", Name: "US-LAX-02", Provider: "RackNerd", Region: "洛杉矶", Family: 4, ReportedIP: "198.51.100.27", ASN: 62240, Organization: "Clouvider Limited", CountryCode: "US", UsageType: "机房", Risk: 72, Status: "alert", Netflix: "limited", ChatGPT: "available", YouTube: "available", DNSBL: 8, IPChanged: true, LastSeen: now.Add(-2 * time.Minute), LastScan: now.Add(-28 * time.Minute)},
+		{ID: "node_nrt_03", TenantID: "tenant_demo", Name: "JP-NRT-03", Provider: "Vultr", Region: "东京", Family: 4, ReportedIP: "45.76.201.19", ASN: 20473, Organization: "The Constant Company", CountryCode: "JP", UsageType: "机房", Risk: 11, Status: "online", Netflix: "available", ChatGPT: "available", YouTube: "available", DNSBL: 0, LastSeen: now.Add(-51 * time.Second), LastScan: now.Add(-6 * time.Hour)},
+		{ID: "node_fra_04", TenantID: "tenant_demo", Name: "DE-FRA-04", Provider: "Hetzner", Region: "法兰克福", Family: 6, ReportedIP: "2a01:4f8:c2c:17::1", ASN: 24940, Organization: "Hetzner Online", CountryCode: "DE", UsageType: "机房", Risk: 34, Status: "online", Netflix: "blocked", ChatGPT: "available", YouTube: "available", DNSBL: 1, LastSeen: now.Add(-74 * time.Second), LastScan: now.Add(-4 * time.Hour)},
+		{ID: "node_sin_05", TenantID: "tenant_demo", Name: "SG-SIN-05", Provider: "LightNode", Region: "新加坡", Family: 4, ReportedIP: "172.104.51.233", ASN: 63949, Organization: "Akamai Connected Cloud", CountryCode: "SG", UsageType: "机房", Risk: 48, Status: "warning", Netflix: "available", ChatGPT: "blocked", YouTube: "available", DNSBL: 3, LastSeen: now.Add(-4 * time.Minute), LastScan: now.Add(-11 * time.Hour)},
+		{ID: "node_ams_06", TenantID: "tenant_demo", Name: "NL-AMS-06", Provider: "GreenCloud", Region: "阿姆斯特丹", Family: 4, ReportedIP: "185.22.153.44", ASN: 49544, Organization: "iFog GmbH", CountryCode: "NL", UsageType: "机房", Risk: 22, Status: "offline", Netflix: "available", ChatGPT: "available", YouTube: "available", DNSBL: 0, LastSeen: now.Add(-19 * time.Minute), LastScan: now.Add(-13 * time.Hour)},
 	}
 	for i, n := range seedNodes {
 		n.MaskedIP = MaskIP(n.ReportedIP)
@@ -341,7 +341,7 @@ func (m *Memory) NodeDetailFor(id, userID string, admin, fullIP bool) (model.Nod
 		if !ok {
 			continue
 		}
-		snapshot := model.NetworkSnapshot{Family: family, MaskedIP: MaskIP(report.Network.ReportedIP), ASN: report.Quality.ASN, Organization: report.Quality.Organization, CountryCode: report.Quality.CountryCode, Risk: score(report.Quality.Scores, "ipqs"), Netflix: mediaStatus(report.Quality.Media, "netflix"), ChatGPT: mediaStatus(report.Quality.Media, "chatgpt"), CollectedAt: report.CollectedAt, Quality: report.Quality}
+		snapshot := model.NetworkSnapshot{Family: family, MaskedIP: MaskIP(report.Network.ReportedIP), ASN: report.Quality.ASN, Organization: report.Quality.Organization, CountryCode: report.Quality.CountryCode, Risk: score(report.Quality.Scores, "ipqs"), Netflix: mediaStatus(report.Quality.Media, "netflix"), ChatGPT: mediaStatus(report.Quality.Media, "chatgpt"), YouTube: youtubeStatus(report.Quality.Media), Warp: isWarp(report.Quality), CollectedAt: report.CollectedAt, Quality: report.Quality}
 		if fullIP && detail.CanViewFullIP {
 			snapshot.IPAddress = report.Network.ReportedIP
 			if family == detail.Family {
@@ -495,6 +495,7 @@ func (m *Memory) SaveReport(r model.Report) error {
 		sort.Ints(n.Families)
 	}
 	reportRisk := score(r.Quality.Scores, "ipqs")
+	warp := isWarp(r.Quality)
 	if n.Family == 0 || r.Network.Family == 4 || n.Family != 4 {
 		n.Family = r.Network.Family
 		n.ReportedIP = r.Network.ReportedIP
@@ -505,7 +506,14 @@ func (m *Memory) SaveReport(r model.Report) error {
 		n.Risk = reportRisk
 		n.Netflix = mediaStatus(r.Quality.Media, "netflix")
 		n.ChatGPT = mediaStatus(r.Quality.Media, "chatgpt")
+		n.YouTube = youtubeStatus(r.Quality.Media)
+		n.UsageType = r.Quality.UsageType
 		n.DNSBL = dnsblCount(r.Quality.Mail)
+	}
+	if r.Network.Family == 4 {
+		n.WarpV4 = warp
+	} else if r.Network.Family == 6 {
+		n.WarpV6 = warp
 	}
 	if r.CollectedAt.After(n.LastScan) {
 		n.LastScan = r.CollectedAt
@@ -578,15 +586,71 @@ func mediaStatus(media map[string]any, key string) string {
 		}
 		status := strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
 		switch status {
-		case "available", "unlocked", "yes", "解锁", "可用", "原生":
+		case "available", "unlocked", "yes", "解锁", "可用", "原生", "full":
 			return "available"
-		case "limited", "partial", "仅自制", "部分解锁":
+		case "limited", "partial", "仅自制", "部分解锁", "only-home", "自制", "region":
 			return "limited"
-		case "blocked", "no", "不可用", "未解锁", "屏蔽":
+		case "blocked", "no", "不可用", "未解锁", "屏蔽", "block":
 			return "blocked"
 		}
 	}
 	return "unknown"
+}
+
+// youtubeStatus resolves the YouTube unlock state, additionally flagging the
+// "送中" (CN-region) case where YouTube is reachable but region-locked to China.
+func youtubeStatus(media map[string]any) string {
+	var entry map[string]any
+	for name, raw := range media {
+		if strings.EqualFold(name, "youtube") {
+			entry, _ = raw.(map[string]any)
+			break
+		}
+	}
+	if entry == nil {
+		return "unknown"
+	}
+	if region, ok := entry["Region"].(string); ok {
+		ru := strings.ToUpper(strings.TrimSpace(region))
+		if ru == "CN" || ru == "CHN" || ru == "中国" || ru == "CHINA" {
+			return "cn"
+		}
+	}
+	return mediaStatus(media, "youtube")
+}
+
+// isWarp detects a Cloudflare WARP exit IP: the VPN or Proxy risk factor is
+// positive and the ASN/organization belongs to Cloudflare (WARP uses AS13335 /
+// AS395747). Also honours a literal "WARP" risk factor if a future collector
+// provides one.
+func isWarp(q model.Quality) bool {
+	if sub, ok := q.Factors["WARP"].(map[string]any); ok && anyTrueFlag(sub) {
+		return true
+	}
+	vpn := false
+	if sub, ok := q.Factors["VPN"].(map[string]any); ok {
+		vpn = anyTrueFlag(sub)
+	}
+	proxy := false
+	if sub, ok := q.Factors["Proxy"].(map[string]any); ok {
+		proxy = anyTrueFlag(sub)
+	}
+	if !vpn && !proxy {
+		return false
+	}
+	org := strings.ToUpper(q.Organization)
+	return q.ASN == 13335 || q.ASN == 395747 ||
+		strings.Contains(org, "CLOUDFLARE") || strings.Contains(org, "WARP")
+}
+
+// anyTrueFlag reports whether any value in a provider→bool map is true.
+func anyTrueFlag(m map[string]any) bool {
+	for _, v := range m {
+		if b, ok := v.(bool); ok && b {
+			return true
+		}
+	}
+	return false
 }
 
 func dnsblCount(mail map[string]any) int {

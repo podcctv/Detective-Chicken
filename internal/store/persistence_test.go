@@ -95,3 +95,78 @@ func TestMaskIPLastTwoSegments(t *testing.T) {
 		}
 	}
 }
+
+func TestIsWarpDetectsCloudflareVPN(t *testing.T) {
+	cloudflare := model.Quality{
+		ASN:          13335,
+		Organization: "Cloudflare",
+		Factors: map[string]any{
+			"VPN":   map[string]any{"IP2LOCATION": true},
+			"Proxy": map[string]any{"IP2LOCATION": false},
+		},
+	}
+	if !isWarp(cloudflare) {
+		t.Fatal("expected WARP detection for Cloudflare ASN with VPN flag")
+	}
+	generic := model.Quality{
+		ASN:          64500,
+		Organization: "Example",
+		Factors: map[string]any{
+			"VPN":   map[string]any{"IP2LOCATION": true},
+			"Proxy": map[string]any{"IP2LOCATION": false},
+		},
+	}
+	if isWarp(generic) {
+		t.Fatal("expected no WARP for non-Cloudflare VPN")
+	}
+	noProxy := model.Quality{ASN: 13335, Organization: "Cloudflare", Factors: map[string]any{}}
+	if isWarp(noProxy) {
+		t.Fatal("expected no WARP when VPN/Proxy factors are absent")
+	}
+}
+
+func TestSaveReportCapturesIPTypeYouTubeAndWarp(t *testing.T) {
+	st := NewMemory(false)
+	enrollment := st.CreateEnrollment("tenant", "owner", "Node", "Provider", "Region", "auto", "lxc", "amd64", 360)
+	node, agentKey, err := st.Register(enrollment.Token, make([]byte, ed25519.PublicKeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := model.Report{
+		ReportID:   "report-v4",
+		NodeID:     node.ID,
+		AgentID:    agentKey.AgentID,
+		CollectedAt: time.Now().UTC(),
+		Network:    model.Network{Family: 4, ReportedIP: "162.158.0.1"},
+		Quality: model.Quality{
+			ASN:         13335,
+			Organization: "Cloudflare",
+			UsageType:   "机房",
+			Factors: map[string]any{
+				"VPN":   map[string]any{"IP2LOCATION": true},
+				"Proxy": map[string]any{"IP2LOCATION": false},
+			},
+			Media: map[string]any{
+				"Netflix": map[string]any{"Status": "Yes"},
+				"ChatGPT": map[string]any{"Status": "Yes"},
+				"Youtube": map[string]any{"Status": "Yes", "Region": "CN"},
+			},
+		},
+	}
+	if err := st.SaveReport(report); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.Node(node.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.UsageType != "机房" {
+		t.Fatalf("usage type not stored: %q", stored.UsageType)
+	}
+	if stored.YouTube != "cn" {
+		t.Fatalf("youtube 送中 not detected: %q", stored.YouTube)
+	}
+	if !stored.WarpV4 {
+		t.Fatal("WARP not detected for Cloudflare VPN IPv4")
+	}
+}

@@ -26,10 +26,14 @@ export interface Node {
   asn: number;
   organization: string;
   country_code: string;
+  usage_type: string;
   risk: number;
   status: "online" | "warning" | "alert" | "offline" | "pending";
   netflix: string;
   chatgpt: string;
+  youtube: string;
+  warp_v4: boolean;
+  warp_v6: boolean;
   dnsbl: number;
   ip_changed: boolean;
   last_seen: string;
@@ -106,6 +110,8 @@ export interface NetworkSnapshot {
   risk: number;
   netflix: string;
   chatgpt: string;
+  youtube: string;
+  warp: boolean;
   collected_at: string;
   quality: Quality;
 }

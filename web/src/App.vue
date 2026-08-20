@@ -468,6 +468,7 @@ const mediaRows = computed(() => {
   return [
     { name: "Netflix", status: selected.value.netflix },
     { name: "ChatGPT", status: selected.value.chatgpt },
+    { name: "YouTube", status: selected.value.youtube },
   ];
 });
 

@@ -36,6 +36,29 @@ func TestParseIPQualityRejectsNonJSON(t *testing.T) {
 	}
 }
 
+func TestParseIPQualityReadsUsageTypeMap(t *testing.T) {
+	// The real ipquality JSON nests Usage/Company as provider→label maps.
+	raw := []byte(`{
+		"Head":{"IP":"203.0.113.8","Version":"v2026-08-09"},
+		"Info":{"IP":"203.0.113.8","ASN":"3462","Organization":"Example","CountryCode":"TW"},
+		"Type":{"Usage":{"IPinfo":"ISP","ipregistry":"ISP","ipapi":"ISP","AbuseIPDB":"Line ISP"},"Company":{"IPinfo":"ISP","ipregistry":"ISP","ipapi":"ISP"}},
+		"Score":{"IPQS":"18"},
+		"Factor":{"Proxy":{"IP2LOCATION":false},"VPN":{"IP2LOCATION":false}},
+		"Media":{"Netflix":{"Status":"Yes"},"ChatGPT":{"Status":"Yes"},"Youtube":{"Status":"Yes","Region":"CN"}},
+		"Mail":{}
+	}`)
+	report, err := ParseIPQuality(raw, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Quality.ASN != 3462 {
+		t.Fatalf("ASN not parsed: %#v", report.Quality.ASN)
+	}
+	if report.Quality.UsageType != "家宽" {
+		t.Fatalf("usage type not normalized, got %q", report.Quality.UsageType)
+	}
+}
+
 func TestCollectorAcceptsValidJSONDespiteUpstreamExitCode(t *testing.T) {
 	raw := []byte(`{"Info":{"IP":"203.0.113.8","ASN":64500},"Score":{"IPQS":18},"Factor":{},"Media":{},"Mail":{}}`)
 	report, err := finishCollection(raw, "upstream returned status 1", errors.New("exit status 1"), 4)

@@ -22,10 +22,14 @@ type Node struct {
 	ASN                 int64     `json:"asn"`
 	Organization        string    `json:"organization"`
 	CountryCode         string    `json:"country_code"`
+	UsageType           string    `json:"usage_type"`
 	Risk                int       `json:"risk"`
 	Status              string    `json:"status"`
 	Netflix             string    `json:"netflix"`
 	ChatGPT             string    `json:"chatgpt"`
+	YouTube             string    `json:"youtube"`
+	WarpV4              bool      `json:"warp_v4"`
+	WarpV6              bool      `json:"warp_v6"`
 	DNSBL               int       `json:"dnsbl"`
 	IPChanged           bool      `json:"ip_changed"`
 	LastSeen            time.Time `json:"last_seen"`
@@ -156,6 +160,8 @@ type NetworkSnapshot struct {
 	Risk         int       `json:"risk"`
 	Netflix      string    `json:"netflix"`
 	ChatGPT      string    `json:"chatgpt"`
+	YouTube      string    `json:"youtube"`
+	Warp         bool      `json:"warp"`
 	CollectedAt  time.Time `json:"collected_at"`
 	Quality      Quality   `json:"quality"`
 }

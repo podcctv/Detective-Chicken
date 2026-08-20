@@ -34,6 +34,12 @@ const relative = (input?: string) => {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
   return `${Math.floor(seconds / 86400)} 天前`;
 };
+const families = (node: { families?: number[]; family?: number }) =>
+  node.families && node.families.length
+    ? node.families
+    : [node.family || 4];
+const warpOf = (node: { warp_v4?: boolean; warp_v6?: boolean }, family: number) =>
+  family === 4 ? !!node.warp_v4 : !!node.warp_v6;
 </script>
 
 <template>
@@ -216,12 +222,20 @@ const relative = (input?: string) => {
               <div>
                 <dt>网络</dt>
                 <dd>
-                  {{
-                    (node.families?.length ? node.families : [node.family || 4])
-                      .map((family) => `IPv${family}`)
-                      .join(" + ")
-                  }}
+                  <span
+                    v-for="family in families(node)"
+                    :key="family"
+                    class="net-chip"
+                    >IPv{{ family
+                    }}<span v-if="warpOf(node, family)" class="warp-tag">
+                      · WARP</span
+                    ></span
+                  >
                 </dd>
+              </div>
+              <div>
+                <dt>网络类型</dt>
+                <dd>{{ node.usage_type || "等待检测" }}</dd>
               </div>
               <div>
                 <dt>ASN</dt>
@@ -234,6 +248,9 @@ const relative = (input?: string) => {
                 <StatusBadge :value="node.netflix" kind="media" /></span
               ><span
                 >ChatGPT <StatusBadge :value="node.chatgpt" kind="media"
+              /></span
+              ><span
+                >YouTube <StatusBadge :value="node.youtube" kind="media"
               /></span>
             </footer>
           </article>

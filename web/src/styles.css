@@ -729,6 +729,12 @@ td small {
 .status-badge.is-blocked i {
   background: var(--danger);
 }
+.status-badge.is-cn {
+  color: var(--warning);
+}
+.status-badge.is-cn i {
+  background: var(--warning);
+}
 .dnsbl {
   display: inline-grid;
   min-width: 24px;
@@ -2260,11 +2266,27 @@ footer {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.public-node dd .net-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--faint);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.public-node dd .net-chip + .net-chip {
+  margin-left: 5px;
+}
+.public-node dd .net-chip .warp-tag {
+  color: var(--danger);
+  font-weight: 600;
+}
 .public-node > footer {
   margin-top: 13px;
   padding-top: 10px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   border-top: 1px solid var(--border);
 }
