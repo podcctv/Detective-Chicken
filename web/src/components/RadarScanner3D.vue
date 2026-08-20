@@ -27,23 +27,33 @@ watch(() => props.activeNode, (newNode) => {
   if (newNode) selectedNodeId.value = newNode.id
 })
 
-// Metrics computed for the 3D radar
+// Metrics computed for the 3D radar from real node data
 const radarMetrics = computed(() => {
   const n = currentNode.value
   if (!n) return []
-  const streamingCount = Object.keys(n.unlocks?.streaming ?? {}).length || 10
-  const streamingUnlocked = Object.values(n.unlocks?.streaming ?? {}).filter((u) => u.status === 'available').length
-  const aiCount = Object.keys(n.unlocks?.ai ?? {}).length || 10
-  const aiUnlocked = Object.values(n.unlocks?.ai ?? {}).filter((u) => u.status === 'available').length
+  const streamingEntries = Object.values(n.unlocks?.streaming ?? {})
+  const streamingUnlocked = streamingEntries.filter((u) => u.status === 'available').length
+  const streamingCount = streamingEntries.length
+  const streamingRatio = streamingCount > 0 
+    ? Math.round((streamingUnlocked / streamingCount) * 100)
+    : (n.netflix === 'available' ? 100 : n.netflix === 'limited' ? 50 : 0)
+
+  const aiEntries = Object.values(n.unlocks?.ai ?? {})
+  const aiUnlocked = aiEntries.filter((u) => u.status === 'available').length
+  const aiCount = aiEntries.length
+  const aiRatio = aiCount > 0
+    ? Math.round((aiUnlocked / aiCount) * 100)
+    : (n.chatgpt === 'available' ? 100 : 0)
 
   return [
     { label: 'IP 纯净度', value: Math.max(0, 100 - n.risk), max: 100, color: '#10b981', unit: '分' },
-    { label: 'AI 模型解锁', value: Math.round((aiUnlocked / aiCount) * 100), max: 100, color: '#a855f7', unit: '%' },
-    { label: '流媒体原生', value: Math.round((streamingUnlocked / streamingCount) * 100), max: 100, color: '#38bdf8', unit: '%' },
+    { label: 'AI 模型解锁', value: aiRatio, max: 100, color: '#a855f7', unit: '%' },
+    { label: '流媒体原生', value: streamingRatio, max: 100, color: '#38bdf8', unit: '%' },
     { label: 'DNSBL 安全度', value: Math.max(0, 100 - n.dnsbl * 12), max: 100, color: '#f59e0b', unit: '分' },
     { label: '网络稳定性', value: n.status === 'online' ? 98 : n.status === 'warning' ? 75 : n.status === 'alert' ? 45 : 10, max: 100, color: '#06b6d4', unit: '%' },
   ]
 })
+
 
 const drawRadar = () => {
   const canvas = canvasRef.value

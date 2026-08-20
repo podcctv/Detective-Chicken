@@ -110,9 +110,30 @@ func (m *Memory) restoreReportedIPs() {
 		node := m.nodes[nodeID]
 		node.ReportedIP = report.Network.ReportedIP
 		node.MaskedIP = MaskIP(report.Network.ReportedIP)
+		if report.Quality.ASN != 0 {
+			node.ASN = report.Quality.ASN
+		}
+		if report.Quality.Organization != "" {
+			node.Organization = report.Quality.Organization
+		}
+		if report.Quality.CountryCode != "" {
+			node.CountryCode = report.Quality.CountryCode
+		}
+		if report.Quality.Latitude != 0 {
+			node.Latitude = report.Quality.Latitude
+		}
+		if report.Quality.Longitude != 0 {
+			node.Longitude = report.Quality.Longitude
+		}
+		node.Risk = computeRisk(report.Quality.Scores)
+		node.Netflix = mediaStatus(report.Quality.Media, "netflix")
+		node.ChatGPT = mediaStatus(report.Quality.Media, "chatgpt")
+		node.Unlocks = parseNodeUnlocks(report.Quality.Media, node.CountryCode)
+		node.DNSBL = dnsblCount(report.Quality.Mail)
 		m.nodes[nodeID] = node
 	}
 }
+
 
 func nonNil[K comparable, V any](value map[K]V) map[K]V {
 	if value == nil {

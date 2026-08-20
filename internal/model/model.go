@@ -116,6 +116,9 @@ type Quality struct {
 	ASN          int64                      `json:"asn"`
 	Organization string                     `json:"organization"`
 	CountryCode  string                     `json:"country_code"`
+	City         string                     `json:"city,omitempty"`
+	Latitude     float64                    `json:"latitude,omitempty"`
+	Longitude    float64                    `json:"longitude,omitempty"`
 	UsageType    string                     `json:"usage_type"`
 	CompanyType  string                     `json:"company_type"`
 	Scores       map[string]json.RawMessage `json:"scores"`
@@ -123,6 +126,7 @@ type Quality struct {
 	Media        map[string]any             `json:"media"`
 	Mail         map[string]any             `json:"mail"`
 }
+
 
 type Report struct {
 	SchemaVersion string          `json:"schema_version"`

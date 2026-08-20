@@ -107,47 +107,177 @@ func MaskIP(ip string) string {
 	return ip
 }
 
-func mockNodeUnlocks(regionCode, netflixStatus, chatgptStatus string) model.NodeUnlocks {
-	stream := map[string]model.UnlockInfo{
-		"netflix":    {ID: "netflix", Name: "Netflix", Category: "streaming", Status: netflixStatus, Region: regionCode, Quality: "原生 4K/HDR", LatencyMs: 42, Detail: "解锁全部非自制剧"},
-		"disney":     {ID: "disney", Name: "Disney+", Category: "streaming", Status: "available", Region: regionCode, Quality: "Star+ / IMAX", LatencyMs: 55, Detail: "全量内容畅享"},
-		"youtube":    {ID: "youtube", Name: "YouTube Premium", Category: "streaming", Status: "available", Region: regionCode, Quality: "免广告 / 4K60", LatencyMs: 28, Detail: "支持后台播放与 YouTube Music"},
-		"spotify":    {ID: "spotify", Name: "Spotify", Category: "streaming", Status: "available", Region: regionCode, Quality: "无损音质", LatencyMs: 35, Detail: "全区曲库可用"},
-		"prime":      {ID: "prime", Name: "Prime Video", Category: "streaming", Status: "available", Region: regionCode, Quality: "1080P", LatencyMs: 62, Detail: "区域版权库可用"},
-		"hbo":        {ID: "hbo", Name: "Max (HBO)", Category: "streaming", Status: "available", Region: regionCode, Quality: "4K HDR", LatencyMs: 78, Detail: "华纳原生影视"},
-		"hulu":       {ID: "hulu", Name: "Hulu", Category: "streaming", Status: "available", Region: "US", Quality: "1080P", LatencyMs: 82, Detail: "原生美区支持"},
-		"bilibili":   {ID: "bilibili", Name: "Bilibili (港澳台/东南亚)", Category: "streaming", Status: "available", Region: regionCode, Quality: "4K 超清", LatencyMs: 25, Detail: "解除区域版权限制"},
-		"tiktok":     {ID: "tiktok", Name: "TikTok", Category: "streaming", Status: "available", Region: regionCode, Quality: "免拔卡", LatencyMs: 38, Detail: "商业推流正常"},
-		"appletv":    {ID: "appletv", Name: "Apple TV+", Category: "streaming", Status: "available", Region: regionCode, Quality: "4K 杜比视界", LatencyMs: 32, Detail: "官方 CDN 原生直连"},
-	}
+func parseNodeUnlocks(media map[string]any, defaultRegion string) model.NodeUnlocks {
+	stream := map[string]model.UnlockInfo{}
+	ai := map[string]model.UnlockInfo{}
 
-	if netflixStatus == "limited" {
-		stream["netflix"] = model.UnlockInfo{ID: "netflix", Name: "Netflix", Category: "streaming", Status: "limited", Region: regionCode, Quality: "仅自制剧 (Originals Only)", LatencyMs: 58, Detail: "非自制内容受限"}
-	} else if netflixStatus == "blocked" {
-		stream["netflix"] = model.UnlockInfo{ID: "netflix", Name: "Netflix", Category: "streaming", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "机房 IP 拦截过滤"}
-		stream["hbo"] = model.UnlockInfo{ID: "hbo", Name: "Max (HBO)", Category: "streaming", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "区域阻断 403"}
-	}
+	for rawKey, rawVal := range media {
+		entry, ok := rawVal.(map[string]any)
+		if !ok {
+			continue
+		}
+		statusRaw := strings.TrimSpace(fmt.Sprint(entry["Status"]))
+		regionRaw := strings.TrimSpace(fmt.Sprint(entry["Region"]))
+		if regionRaw == "" || regionRaw == "<nil>" {
+			regionRaw = defaultRegion
+		}
+		typeRaw := strings.TrimSpace(fmt.Sprint(entry["Type"]))
+		if typeRaw == "<nil>" {
+			typeRaw = ""
+		}
 
-	ai := map[string]model.UnlockInfo{
-		"chatgpt":     {ID: "chatgpt", Name: "ChatGPT / OpenAI", Category: "ai", Status: chatgptStatus, Region: regionCode, Quality: "GPT-4o / Web+API", LatencyMs: 85, Detail: "Cloudflare Turnstile 判定通过"},
-		"claude":      {ID: "claude", Name: "Claude (Anthropic)", Category: "ai", Status: "available", Region: regionCode, Quality: "Sonnet 3.5 / API", LatencyMs: 95, Detail: "控制台访问正常"},
-		"gemini":      {ID: "gemini", Name: "Google Gemini", Category: "ai", Status: "available", Region: regionCode, Quality: "Advanced / AI Studio", LatencyMs: 65, Detail: "欧洲/亚洲边缘加速"},
-		"midjourney":  {ID: "midjourney", Name: "Midjourney", Category: "ai", Status: "available", Region: regionCode, Quality: "Discord / Web", LatencyMs: 110, Detail: "官方代理通道畅通"},
-		"copilot":     {ID: "copilot", Name: "Microsoft Copilot", Category: "ai", Status: "available", Region: regionCode, Quality: "Bing / Edge", LatencyMs: 70, Detail: "免验证访问"},
-		"grok":        {ID: "grok", Name: "xAI Grok", Category: "ai", Status: "available", Region: regionCode, Quality: "X Platform", LatencyMs: 88, Detail: "助手响应正常"},
-		"perplexity":  {ID: "perplexity", Name: "Perplexity AI", Category: "ai", Status: "available", Region: regionCode, Quality: "Pro Search", LatencyMs: 75, Detail: "直连免验证码"},
-		"github_cop":  {ID: "github_cop", Name: "GitHub Copilot", Category: "ai", Status: "available", Region: regionCode, Quality: "IDE Telemetry", LatencyMs: 52, Detail: "代码补全低延迟"},
-		"deepseek":    {ID: "deepseek", Name: "DeepSeek", Category: "ai", Status: "available", Region: regionCode, Quality: "官方推理集群", LatencyMs: 45, Detail: "直连中继畅通"},
-		"huggingface": {ID: "huggingface", Name: "HuggingFace", Category: "ai", Status: "available", Region: regionCode, Quality: "Spaces & Hub", LatencyMs: 60, Detail: "模型下载无限速"},
-	}
+		status := "blocked"
+		switch strings.ToLower(statusRaw) {
+		case "available", "unlocked", "yes", "解锁", "可用", "原生", "允许", "true":
+			status = "available"
+		case "limited", "partial", "仅自制", "部分解锁", "限制":
+			status = "limited"
+		case "blocked", "no", "不可用", "未解锁", "屏蔽", "失败", "质询", "false":
+			status = "blocked"
+		}
 
-	if chatgptStatus == "blocked" {
-		ai["chatgpt"] = model.UnlockInfo{ID: "chatgpt", Name: "ChatGPT / OpenAI", Category: "ai", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "Cloudflare Turnstile 拦截"}
-		ai["claude"] = model.UnlockInfo{ID: "claude", Name: "Claude (Anthropic)", Category: "ai", Status: "blocked", Region: regionCode, Quality: "不可用", LatencyMs: 0, Detail: "机房 IP 403 阻断"}
+		keyLower := strings.ToLower(rawKey)
+		serviceID := keyLower
+		category := "streaming"
+		serviceName := rawKey
+
+		switch keyLower {
+		case "chatgpt", "openai":
+			serviceID = "chatgpt"
+			serviceName = "ChatGPT"
+			category = "ai"
+		case "claude", "anthropic":
+			serviceID = "claude"
+			serviceName = "Claude"
+			category = "ai"
+		case "gemini", "google_ai":
+			serviceID = "gemini"
+			serviceName = "Gemini"
+			category = "ai"
+		case "deepseek":
+			serviceID = "deepseek"
+			serviceName = "DeepSeek"
+			category = "ai"
+		case "midjourney":
+			serviceID = "midjourney"
+			serviceName = "Midjourney"
+			category = "ai"
+		case "copilot", "bing_copilot":
+			serviceID = "copilot"
+			serviceName = "Copilot"
+			category = "ai"
+		case "grok", "xai":
+			serviceID = "grok"
+			serviceName = "Grok"
+			category = "ai"
+		case "perplexity":
+			serviceID = "perplexity"
+			serviceName = "Perplexity"
+			category = "ai"
+		case "github_cop", "github_copilot":
+			serviceID = "github_cop"
+			serviceName = "GitHub Copilot"
+			category = "ai"
+		case "huggingface":
+			serviceID = "huggingface"
+			serviceName = "HuggingFace"
+			category = "ai"
+		case "reddit":
+			serviceID = "reddit"
+			serviceName = "Reddit"
+			category = "ai"
+		case "netflix":
+			serviceID = "netflix"
+			serviceName = "Netflix"
+			category = "streaming"
+		case "disneyplus", "disney", "disney+":
+			serviceID = "disney"
+			serviceName = "Disney+"
+			category = "streaming"
+		case "youtube", "yt":
+			serviceID = "youtube"
+			serviceName = "YouTube Prem"
+			category = "streaming"
+		case "amazonprimevideo", "primevideo", "prime":
+			serviceID = "prime"
+			serviceName = "Prime Video"
+			category = "streaming"
+		case "spotify":
+			serviceID = "spotify"
+			serviceName = "Spotify"
+			category = "streaming"
+		case "tiktok":
+			serviceID = "tiktok"
+			serviceName = "TikTok"
+			category = "streaming"
+		case "max", "hbo", "hbomax":
+			serviceID = "max"
+			serviceName = "Max (HBO)"
+			category = "streaming"
+		case "hulu":
+			serviceID = "hulu"
+			serviceName = "Hulu"
+			category = "streaming"
+		case "bilibili":
+			serviceID = "bilibili"
+			serviceName = "Bilibili"
+			category = "streaming"
+		case "appletv", "apple_tv", "appletv+":
+			serviceID = "appletv"
+			serviceName = "Apple TV+"
+			category = "streaming"
+		}
+
+		qualityDesc := statusRaw
+		if typeRaw != "" && typeRaw != statusRaw {
+			qualityDesc = typeRaw + " " + statusRaw
+		}
+
+		info := model.UnlockInfo{
+			ID:       serviceID,
+			Name:     serviceName,
+			Category: category,
+			Status:   status,
+			Region:   regionRaw,
+			Quality:  qualityDesc,
+			Detail:   fmt.Sprintf("%s · %s", serviceName, qualityDesc),
+		}
+
+		if category == "ai" {
+			ai[serviceID] = info
+		} else {
+			stream[serviceID] = info
+		}
 	}
 
 	return model.NodeUnlocks{Streaming: stream, AI: ai}
 }
+
+func computeRisk(scores map[string]json.RawMessage) int {
+	maxRisk := 0
+	found := false
+	for k, v := range scores {
+		valStr := strings.Trim(string(v), `"`)
+		if valStr == "null" || valStr == "" {
+			continue
+		}
+		valStr = strings.TrimSuffix(valStr, "%")
+		if f, err := strconv.ParseFloat(valStr, 64); err == nil {
+			val := int(f)
+			if strings.EqualFold(k, "ipqs") || strings.EqualFold(k, "scamalytics") || strings.EqualFold(k, "abuseipdb") || strings.EqualFold(k, "ip2location") || strings.EqualFold(k, "dbip") {
+				if val > maxRisk {
+					maxRisk = val
+				}
+				found = true
+			}
+		}
+	}
+	if !found {
+		return 0
+	}
+	return maxRisk
+}
+
 
 func (m *Memory) seed() {
 	now := time.Now().UTC()
@@ -606,18 +736,26 @@ func (m *Memory) SaveReport(r model.Report) error {
 		n.Families = append(n.Families, r.Network.Family)
 		sort.Ints(n.Families)
 	}
-	reportRisk := score(r.Quality.Scores, "ipqs")
+	reportRisk := computeRisk(r.Quality.Scores)
 	if n.Family == 0 || r.Network.Family == 4 || n.Family != 4 {
 		n.Family = r.Network.Family
 		n.ReportedIP = r.Network.ReportedIP
 		n.MaskedIP = MaskIP(r.Network.ReportedIP)
 		n.ASN = r.Quality.ASN
 		n.Organization = r.Quality.Organization
-		n.CountryCode = r.Quality.CountryCode
+		if r.Quality.CountryCode != "" {
+			n.CountryCode = r.Quality.CountryCode
+		}
+		if r.Quality.Latitude != 0 {
+			n.Latitude = r.Quality.Latitude
+		}
+		if r.Quality.Longitude != 0 {
+			n.Longitude = r.Quality.Longitude
+		}
 		n.Risk = reportRisk
 		n.Netflix = mediaStatus(r.Quality.Media, "netflix")
 		n.ChatGPT = mediaStatus(r.Quality.Media, "chatgpt")
-		n.Unlocks = mockNodeUnlocks(n.CountryCode, n.Netflix, n.ChatGPT)
+		n.Unlocks = parseNodeUnlocks(r.Quality.Media, n.CountryCode)
 		n.DNSBL = dnsblCount(r.Quality.Mail)
 	}
 	if r.CollectedAt.After(n.LastScan) {
@@ -633,6 +771,7 @@ func (m *Memory) SaveReport(r model.Report) error {
 	m.persistLocked()
 	return nil
 }
+
 
 func containsFamily(families []int, family int) bool {
 	for _, candidate := range families {

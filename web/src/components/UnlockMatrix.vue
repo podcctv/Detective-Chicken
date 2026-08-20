@@ -93,68 +93,131 @@ const filteredNodes = computed(() => {
   })
 })
 
+// Dynamic summary metrics computed from real nodes
+const dynamicSummary = computed(() => {
+  const nodes = props.nodes || []
+  let totalAI = 0
+  let availableAI = 0
+  let totalStream = 0
+  let availableStream = 0
+
+  const goldenNodes: string[] = []
+  const blockedNodes: string[] = []
+
+  for (const n of nodes) {
+    let nodeHasBlocked = false
+
+    // Check all real unlocks on this node
+    const streamUnlocks = Object.values(n.unlocks?.streaming ?? {})
+    const aiUnlocks = Object.values(n.unlocks?.ai ?? {})
+
+    for (const u of aiUnlocks) {
+      if (u.status !== 'untested') {
+        totalAI++
+        if (u.status === 'available') availableAI++
+        else if (u.status === 'blocked') nodeHasBlocked = true
+      }
+    }
+    for (const u of streamUnlocks) {
+      if (u.status !== 'untested') {
+        totalStream++
+        if (u.status === 'available') availableStream++
+        else if (u.status === 'blocked') nodeHasBlocked = true
+      }
+    }
+
+    // Fallback single checks if unlocks object is empty
+    if (aiUnlocks.length === 0 && n.chatgpt) {
+      totalAI++
+      if (n.chatgpt === 'available') availableAI++
+      else if (n.chatgpt === 'blocked') nodeHasBlocked = true
+    }
+    if (streamUnlocks.length === 0 && n.netflix) {
+      totalStream++
+      if (n.netflix === 'available') availableStream++
+      else if (n.netflix === 'blocked') nodeHasBlocked = true
+    }
+
+    if (n.status === 'online' && n.risk <= 30 && (n.netflix === 'available' || n.chatgpt === 'available')) {
+      goldenNodes.push(n.name)
+    }
+    if (nodeHasBlocked || n.risk >= 60 || n.status === 'alert') {
+      blockedNodes.push(n.name)
+    }
+  }
+
+  const aiRate = totalAI > 0 ? Math.round((availableAI / totalAI) * 100) : 100
+  const streamRate = totalStream > 0 ? Math.round((availableStream / totalStream) * 100) : 100
+
+  return {
+    aiRate,
+    streamRate,
+    goldenNodesText: goldenNodes.slice(0, 3).join(' · ') || (nodes.length > 0 ? nodes[0].name : '暂无节点'),
+    blockedNodesText: blockedNodes.slice(0, 3).join(' · ') || '无阻断告警节点',
+    hasBlocked: blockedNodes.length > 0,
+  }
+})
+
 // Helper to get unlock info for a node and service
 const getUnlock = (node: Node, serviceId: string): UnlockInfo => {
   const found = node.unlocks?.streaming?.[serviceId] ?? node.unlocks?.ai?.[serviceId]
   if (found) return found
 
-  if (serviceId === 'netflix') {
-    const st = (node.netflix === 'available' || node.netflix === 'limited' || node.netflix === 'blocked') ? node.netflix : 'available'
+  if (serviceId === 'netflix' && node.netflix) {
+    const st = (node.netflix === 'available' || node.netflix === 'limited' || node.netflix === 'blocked') ? node.netflix : 'untested'
     return {
       id: 'netflix',
       name: 'Netflix',
       category: 'streaming',
       status: st,
-      region: node.country_code || 'HK',
-      quality: st === 'available' ? '原生 4K/HDR' : st === 'limited' ? '仅自制剧' : '未解锁',
-      detail: st === 'available' ? '原生解锁全部内容' : st === 'limited' ? '非自制内容受限' : '机房过滤拦截',
+      region: node.country_code || '',
+      quality: st === 'available' ? '原生 4K/HDR' : st === 'limited' ? '仅自制剧' : st === 'blocked' ? '未解锁' : '未检测',
+      detail: st === 'available' ? '原生解锁全部内容' : st === 'limited' ? '非自制内容受限' : st === 'blocked' ? '机房过滤拦截' : '未检测',
     }
   }
-  if (serviceId === 'chatgpt') {
-    const st = (node.chatgpt === 'available' || node.chatgpt === 'blocked') ? node.chatgpt : 'available'
+  if (serviceId === 'chatgpt' && node.chatgpt) {
+    const st = (node.chatgpt === 'available' || node.chatgpt === 'blocked') ? node.chatgpt : 'untested'
     return {
       id: 'chatgpt',
       name: 'ChatGPT',
       category: 'ai',
       status: st,
-      region: node.country_code || 'US',
-      quality: st === 'available' ? 'GPT-4o Web+API' : 'Turnstile 拦截',
-      detail: st === 'available' ? '直连免验证码' : 'Cloudflare 质询拦截',
+      region: node.country_code || '',
+      quality: st === 'available' ? 'GPT-4o Web+API' : st === 'blocked' ? 'Turnstile 拦截' : '未检测',
+      detail: st === 'available' ? '直连免验证码' : st === 'blocked' ? 'Cloudflare 质询拦截' : '未检测',
     }
   }
   const meta = serviceCatalog.find((s) => s.id === serviceId)
-  const isAvailable = node.risk < 60
   return {
     id: serviceId,
     name: meta?.name || serviceId,
     category: meta?.category || 'ai',
-    status: isAvailable ? 'available' : 'limited',
-    region: node.country_code || 'Global',
-    quality: isAvailable ? '原生畅通' : '延迟较高',
-    detail: isAvailable ? '连通性正常' : '需要关注',
+    status: 'untested',
+    region: '',
+    quality: '未检测',
+    detail: '当前节点未扫描该项服务',
   }
 }
 
-
 // Compute pass rates per service
 const servicePassRates = computed(() => {
-  const map: Record<string, { total: number; available: number; limited: number; blocked: number; rate: number }> = {}
+  const map: Record<string, { total: number; testedCount: number; available: number; limited: number; blocked: number; rate: number }> = {}
   for (const s of serviceCatalog) {
-    let total = 0
+    let testedCount = 0
     let available = 0
     let limited = 0
     let blocked = 0
     for (const n of props.nodes) {
       const u = getUnlock(n, s.id)
-      if (u) {
-        total++
+      if (u && u.status !== 'untested' && u.status !== 'unknown') {
+        testedCount++
         if (u.status === 'available') available++
         else if (u.status === 'limited') limited++
         else if (u.status === 'blocked') blocked++
       }
     }
-    const rate = total > 0 ? Math.round((available / total) * 100) : 0
-    map[s.id] = { total, available, limited, blocked, rate }
+    const rate = testedCount > 0 ? Math.round((available / testedCount) * 100) : 0
+    map[s.id] = { total: props.nodes.length, testedCount, available, limited, blocked, rate }
   }
   return map
 })
@@ -195,7 +258,7 @@ const hideCellTooltip = () => {
           <div class="metric-icon ai"><Bot :size="20" /></div>
           <div>
             <span>AI 大模型解锁率</span>
-            <strong class="text-good">88%</strong>
+            <strong class="text-good">{{ dynamicSummary.aiRate }}%</strong>
             <small>ChatGPT / Claude / Gemini / DeepSeek</small>
           </div>
         </div>
@@ -203,7 +266,7 @@ const hideCellTooltip = () => {
           <div class="metric-icon streaming"><Tv :size="20" /></div>
           <div>
             <span>流媒体综合解锁率</span>
-            <strong class="text-good">71%</strong>
+            <strong class="text-good">{{ dynamicSummary.streamRate }}%</strong>
             <small>Netflix / Disney+ / YouTube / Max</small>
           </div>
         </div>
@@ -211,20 +274,24 @@ const hideCellTooltip = () => {
           <div class="metric-icon best"><CheckCircle2 :size="20" /></div>
           <div>
             <span>全解锁金牌节点</span>
-            <strong>HK-CMI-01 · JP-NRT-03</strong>
-            <small>全绿畅通 · 极低延迟</small>
+            <strong>{{ dynamicSummary.goldenNodesText }}</strong>
+            <small>低风险 · 连通畅通</small>
           </div>
         </div>
         <div class="summary-metric">
-          <div class="metric-icon warn"><AlertTriangle :size="20" /></div>
+          <div class="metric-icon" :class="dynamicSummary.hasBlocked ? 'warn' : 'best'">
+            <AlertTriangle v-if="dynamicSummary.hasBlocked" :size="20" />
+            <ShieldCheck v-else :size="20" />
+          </div>
           <div>
             <span>封锁阻断节点</span>
-            <strong class="text-danger">SG-SIN-05 (AI) · DE-FRA-04 (NF)</strong>
-            <small>需机房/IP段风险关注</small>
+            <strong :class="dynamicSummary.hasBlocked ? 'text-danger' : 'text-good'">{{ dynamicSummary.blockedNodesText }}</strong>
+            <small>{{ dynamicSummary.hasBlocked ? '需关注封禁与风险' : '全网节点运行稳定' }}</small>
           </div>
         </div>
       </div>
     </div>
+
 
     <!-- Filter & View Controls Toolbar -->
     <div class="matrix-toolbar">
@@ -354,7 +421,7 @@ const hideCellTooltip = () => {
               @click="
                 () => {
                   const u = getUnlock(node, service.id)
-                  if (u) emit('inspectUnlock', { node, unlock: u })
+                  if (u && u.status !== 'untested') emit('inspectUnlock', { node, unlock: u })
                   else emit('selectNode', node)
                 }
               "
@@ -365,24 +432,36 @@ const hideCellTooltip = () => {
               @mouseleave="hideCellTooltip"
             >
               <div
-                v-if="getUnlock(node, service.id)"
                 class="unlock-tile"
-                :class="`tile-${getUnlock(node, service.id)?.status}`"
+                :class="`tile-${getUnlock(node, service.id).status}`"
               >
-                <div class="tile-icon-indicator">
-                  <CheckCircle2 v-if="getUnlock(node, service.id)?.status === 'available'" :size="12" />
-                  <AlertTriangle v-else-if="getUnlock(node, service.id)?.status === 'limited'" :size="12" />
-                  <XCircle v-else :size="12" />
+                <div v-if="getUnlock(node, service.id).status === 'available'" class="tile-icon-indicator">
+                  <CheckCircle2 :size="12" />
+                </div>
+                <div v-else-if="getUnlock(node, service.id).status === 'limited'" class="tile-icon-indicator">
+                  <AlertTriangle :size="12" />
+                </div>
+                <div v-else-if="getUnlock(node, service.id).status === 'blocked'" class="tile-icon-indicator">
+                  <XCircle :size="12" />
+                </div>
+                <div v-else class="tile-icon-indicator is-untested">
+                  <span>-</span>
                 </div>
                 <div class="tile-copy">
-                  <span class="tile-status">{{ getUnlock(node, service.id)?.status === 'available' ? '解锁' : getUnlock(node, service.id)?.status === 'limited' ? '受限' : '封锁' }}</span>
-                  <span v-if="getUnlock(node, service.id)?.region" class="tile-region">{{ getUnlock(node, service.id)?.region }}</span>
+                  <span class="tile-status">{{
+                    getUnlock(node, service.id).status === 'available'
+                      ? '解锁'
+                      : getUnlock(node, service.id).status === 'limited'
+                        ? '受限'
+                        : getUnlock(node, service.id).status === 'blocked'
+                          ? '封锁'
+                          : '未测'
+                  }}</span>
+                  <span v-if="getUnlock(node, service.id).region && getUnlock(node, service.id).region !== '-'" class="tile-region">{{ getUnlock(node, service.id).region }}</span>
                 </div>
               </div>
-              <div v-else class="unlock-tile tile-unknown">
-                <span>—</span>
-              </div>
             </td>
+
           </tr>
         </tbody>
       </table>
@@ -832,10 +911,20 @@ th.col-sticky-node {
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
+.tile-untested,
 .tile-unknown {
   color: var(--faint, #64748b);
-  opacity: 0.5;
+  background: rgba(148, 163, 184, 0.04);
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  opacity: 0.55;
 }
+
+.tile-icon-indicator.is-untested {
+  font-size: 11px;
+  font-family: monospace;
+  opacity: 0.6;
+}
+
 
 .tile-region {
   font-family: 'Fira Code', monospace;

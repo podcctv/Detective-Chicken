@@ -9,12 +9,19 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/podcctv/detective-chicken/internal/model"
 )
+
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\([a-zA-Z]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)`)
+
+func stripANSI(b []byte) []byte {
+	return ansiRegex.ReplaceAll(b, nil)
+}
 
 type Adapter struct {
 	ScriptURL string
@@ -59,6 +66,7 @@ func finishCollection(stdout []byte, stderr string, runErr error, family int) (m
 }
 
 func ParseIPQuality(raw []byte, family int) (model.Report, error) {
+	raw = stripANSI(raw)
 	raw = extractJSONObject(raw)
 	if len(raw) == 0 {
 		return model.Report{}, errors.New("no JSON object found in collector output")
@@ -69,14 +77,82 @@ func ParseIPQuality(raw []byte, family int) (model.Report, error) {
 	}
 	head := mapAt(upstream, "Head")
 	info := mapAt(upstream, "Info")
+	factors := mapAt(upstream, "Factor")
 	scores := rawMap(mapAt(upstream, "Score"))
-	quality := model.Quality{ASN: int64(numberAt(info, "ASN")), Organization: stringAt(info, "Organization", "Org"), CountryCode: stringAt(info, "CountryCode", "Country"), UsageType: stringAt(mapAt(upstream, "Type"), "UsageType", "Usage"), CompanyType: stringAt(mapAt(upstream, "Type"), "CompanyType", "Company"), Scores: scores, Factors: mapAt(upstream, "Factor"), Media: mapAt(upstream, "Media"), Mail: mapAt(upstream, "Mail")}
+
+	countryCode := stringAt(info, "CountryCode", "Country")
+	if countryCode == "" {
+		if reg, ok := info["Region"].(map[string]any); ok {
+			countryCode = stringAt(reg, "Code")
+		}
+	}
+	if countryCode == "" {
+		if reg, ok := info["RegisteredRegion"].(map[string]any); ok {
+			countryCode = stringAt(reg, "Code")
+		}
+	}
+	if countryCode == "" {
+		if ccMap := mapAt(factors, "CountryCode"); len(ccMap) > 0 {
+			countryCode = stringAt(ccMap, "IPinfo", "IP2LOCATION", "SCAMALYTICS", "ipapi", "DBIP")
+		}
+	}
+
+	city := stringAt(info, "City")
+	if city == "" {
+		if cityMap, ok := info["City"].(map[string]any); ok {
+			city = stringAt(cityMap, "Name", "Subdivisions")
+		}
+	}
+
+	usageType := stringAt(mapAt(upstream, "Type"), "UsageType", "Usage")
+	if usageType == "" {
+		if uMap := mapAt(mapAt(upstream, "Type"), "Usage"); len(uMap) > 0 {
+			usageType = stringAt(uMap, "IPinfo", "ipregistry", "ipapi", "AbuseIPDB", "IP2LOCATION")
+		}
+	}
+	companyType := stringAt(mapAt(upstream, "Type"), "CompanyType", "Company")
+	if companyType == "" {
+		if cMap := mapAt(mapAt(upstream, "Type"), "Company"); len(cMap) > 0 {
+			companyType = stringAt(cMap, "IPinfo", "ipregistry", "ipapi")
+		}
+	}
+
+	quality := model.Quality{
+		ASN:          int64(numberAt(info, "ASN")),
+		Organization: stringAt(info, "Organization", "Org"),
+		CountryCode:  countryCode,
+		City:         city,
+		Latitude:     numberAt(info, "Latitude"),
+		Longitude:    numberAt(info, "Longitude"),
+		UsageType:    usageType,
+		CompanyType:  companyType,
+		Scores:       scores,
+		Factors:      factors,
+		Media:        mapAt(upstream, "Media"),
+		Mail:         mapAt(upstream, "Mail"),
+	}
 	reportedIP := stringAt(head, "IP", "ip")
 	if reportedIP == "" {
 		reportedIP = stringAt(info, "IP", "ip")
 	}
-	return model.Report{SchemaVersion: "1.0", ReportID: newID("rpt"), CollectedAt: time.Now().UTC(), Collector: model.Collector{Name: "ipquality", AdapterVersion: Version, UpstreamVersion: stringAt(head, "Version", "version")}, Network: model.Network{Family: family, ReportedIP: reportedIP}, Quality: quality, Raw: append([]byte(nil), raw...)}, nil
+	return model.Report{
+		SchemaVersion: "1.0",
+		ReportID:      newID("rpt"),
+		CollectedAt:   time.Now().UTC(),
+		Collector: model.Collector{
+			Name:            "ipquality",
+			AdapterVersion:  Version,
+			UpstreamVersion: stringAt(head, "Version", "version"),
+		},
+		Network: model.Network{
+			Family:     family,
+			ReportedIP: reportedIP,
+		},
+		Quality: quality,
+		Raw:     append([]byte(nil), raw...),
+	}, nil
 }
+
 
 func extractJSONObject(raw []byte) []byte {
 	start := bytes.IndexByte(raw, '{')

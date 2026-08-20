@@ -26,8 +26,10 @@ const labels: Record<string, string> = {
   available: '可用',
   limited: '受限',
   blocked: '不可用',
+  untested: '未检测',
   unknown: '未知',
 }
+
 
 const statusClass = computed(() => {
   const v = props.value?.toLowerCase() || 'unknown'
