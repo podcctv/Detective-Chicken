@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/podcctv/detective-chicken/internal/model"
+	xproxy "golang.org/x/net/proxy"
 )
 
 type ProbeResult struct {
@@ -43,8 +44,14 @@ type NetworkIdentity struct {
 
 // Prober performs native concurrent probes on target media and AI endpoints.
 type Prober struct {
-	Family  int // 4 or 6
-	Timeout time.Duration
+	Family   int // 4 or 6
+	Timeout  time.Duration
+	ProxyURL string
+}
+
+func (p *Prober) WithProxy(proxyURL string) *Prober {
+	p.ProxyURL = strings.TrimSpace(proxyURL)
+	return p
 }
 
 func NewProber(family int, timeout time.Duration) *Prober {
@@ -182,13 +189,42 @@ func (p *Prober) getHTTPClient() *http.Client {
 	}
 
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-			return dialer.DialContext(ctx, network, addr)
-		},
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
 		DisableKeepAlives: true,
+	}
+	if p.ProxyURL == "" {
+		transport.DialContext = func(ctx context.Context, _, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, addr)
+		}
+	} else {
+		parsed, err := url.Parse(p.ProxyURL)
+		if err != nil {
+			transport.DialContext = func(context.Context, string, string) (net.Conn, error) { return nil, err }
+		} else {
+			switch strings.ToLower(parsed.Scheme) {
+			case "http", "https":
+				transport.Proxy = http.ProxyURL(parsed)
+				transport.DialContext = dialer.DialContext
+			case "socks5", "socks5h":
+				var auth *xproxy.Auth
+				if parsed.User != nil {
+					password, _ := parsed.User.Password()
+					auth = &xproxy.Auth{User: parsed.User.Username(), Password: password}
+				}
+				socksDialer, socksErr := xproxy.SOCKS5("tcp", parsed.Host, auth, dialer)
+				if socksErr != nil {
+					transport.DialContext = func(context.Context, string, string) (net.Conn, error) { return nil, socksErr }
+				} else if contextDialer, ok := socksDialer.(xproxy.ContextDialer); ok {
+					transport.DialContext = contextDialer.DialContext
+				} else {
+					transport.DialContext = func(_ context.Context, _, addr string) (net.Conn, error) {
+						return socksDialer.Dial("tcp", addr)
+					}
+				}
+			}
+		}
 	}
 
 	return &http.Client{

@@ -38,6 +38,23 @@ func choice(value, fallback string, allowed ...string) string {
 	return fallback
 }
 
+func shellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func installCommand(installURL string) string {
+	return "scan_proxy=${DETECTIVE_CHICKEN_SCAN_PROXY:-}; " +
+		"[ -n \"$scan_proxy\" ] || scan_proxy=${ALL_PROXY:-${all_proxy:-}}; " +
+		"[ -n \"$scan_proxy\" ] || scan_proxy=${HTTPS_PROXY:-${https_proxy:-}}; " +
+		"[ -n \"$scan_proxy\" ] || scan_proxy=${HTTP_PROXY:-${http_proxy:-}}; " +
+		"runner=; " +
+		"if [ \"$(id -u)\" -eq 0 ]; then :; " +
+		"elif command -v sudo >/dev/null 2>&1; then runner=sudo; " +
+		"elif command -v doas >/dev/null 2>&1; then runner=doas; " +
+		"else echo 'Root privileges are required. Switch to root and run this command again.' >&2; exit 1; fi; " +
+		"curl -fsSL " + shellSingleQuote(installURL) + " | ${runner:+$runner }env DETECTIVE_CHICKEN_SCAN_PROXY=\"$scan_proxy\" sh"
+}
+
 func (a *API) installScript(w http.ResponseWriter, r *http.Request) {
 	file := r.PathValue("file")
 	if !strings.HasSuffix(file, ".sh") {

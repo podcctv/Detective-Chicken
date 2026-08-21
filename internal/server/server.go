@@ -75,7 +75,6 @@ func (a *API) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/agents/commands", a.signed(a.commands))
 }
 
-
 func (a *API) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Digest, Signature-Input, Signature")
@@ -172,7 +171,7 @@ func (a *API) enrollment(w http.ResponseWriter, r *http.Request) {
 	}
 	e := a.store.CreateEnrollment(principal.TenantID, principal.User.ID, in.Name, in.Provider, in.Region, in.OSFamily, in.Platform, in.Arch, in.ScanIntervalMinutes)
 	installURL := publicBaseURL(r) + "/api/v1/install/" + e.Token + ".sh"
-	writeJSON(w, 201, map[string]any{"token": e.Token, "expires_at": e.ExpiresAt, "max_uses": 1, "install_url": installURL, "install_command": "curl -fsSL '" + installURL + "' | sudo sh"})
+	writeJSON(w, 201, map[string]any{"token": e.Token, "expires_at": e.ExpiresAt, "max_uses": 1, "install_url": installURL, "install_command": installCommand(installURL)})
 }
 
 func (a *API) reinstallNode(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +188,7 @@ func (a *API) reinstallNode(w http.ResponseWriter, r *http.Request) {
 		"expires_at":      e.ExpiresAt,
 		"max_uses":        1,
 		"install_url":     installURL,
-		"install_command": "curl -fsSL '" + installURL + "' | sudo sh",
+		"install_command": installCommand(installURL),
 	})
 }
 

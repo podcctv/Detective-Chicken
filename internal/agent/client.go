@@ -28,6 +28,7 @@ type Config struct {
 	NodeID     string `json:"node_id"`
 	TenantID   string `json:"tenant_id"`
 	PrivateKey string `json:"private_key"`
+	ScanProxy  string `json:"scan_proxy,omitempty"`
 }
 
 type Client struct {
@@ -44,7 +45,15 @@ type Directive struct {
 	} `json:"commands"`
 }
 
-func Enroll(serverURL, token, configPath string) (Config, error) {
+func Enroll(serverURL, token, configPath, scanProxy string) (Config, error) {
+	if scanProxy == "" {
+		if existing, err := LoadConfig(configPath); err == nil {
+			scanProxy = existing.ScanProxy
+		}
+	}
+	if err := ValidateScanProxy(scanProxy); err != nil {
+		return Config{}, err
+	}
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return Config{}, err
@@ -73,7 +82,7 @@ func Enroll(serverURL, token, configPath string) (Config, error) {
 	if err = json.Unmarshal(raw, &out); err != nil {
 		return Config{}, err
 	}
-	cfg := Config{ServerURL: strings.TrimRight(serverURL, "/"), AgentID: out.AgentID, NodeID: out.NodeID, TenantID: out.TenantID, PrivateKey: base64.StdEncoding.EncodeToString(priv)}
+	cfg := Config{ServerURL: strings.TrimRight(serverURL, "/"), AgentID: out.AgentID, NodeID: out.NodeID, TenantID: out.TenantID, PrivateKey: base64.StdEncoding.EncodeToString(priv), ScanProxy: scanProxy}
 	if err = SaveConfig(configPath, cfg); err != nil {
 		return Config{}, err
 	}
@@ -92,6 +101,9 @@ func LoadConfig(path string) (Config, error) {
 	if cfg.ServerURL == "" || cfg.AgentID == "" || cfg.NodeID == "" || cfg.PrivateKey == "" {
 		return Config{}, errors.New("incomplete agent config")
 	}
+	if err = ValidateScanProxy(cfg.ScanProxy); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 func SaveConfig(path string, cfg Config) error {
@@ -100,6 +112,22 @@ func SaveConfig(path string, cfg Config) error {
 	}
 	raw, _ := json.MarshalIndent(cfg, "", "  ")
 	return os.WriteFile(path, raw, 0600)
+}
+
+func ConfigureScanProxy(path, scanProxy string) (Config, error) {
+	scanProxy = strings.TrimSpace(scanProxy)
+	if err := ValidateScanProxy(scanProxy); err != nil {
+		return Config{}, err
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.ScanProxy = scanProxy
+	if err := SaveConfig(path, cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
 }
 
 func (c *Client) privateKey() (ed25519.PrivateKey, error) {

@@ -138,6 +138,7 @@ const enrollForm = ref({
   platform: 'auto',
   arch: 'auto',
   scan_interval_minutes: 360,
+  scan_proxy: '',
 })
 
 const adminOpen = ref(false)
@@ -419,12 +420,21 @@ const removeCompareNode = (id: string) => {
   if (compareNodeIds.value.length === 0) compareModalOpen.value = false
 }
 
+const shellSingleQuote = (value: string) =>
+  "'" + value.replaceAll("'", "'\"'\"'") + "'"
+
 const createEnrollment = async () => {
   try {
-    enrollment.value = await api<Enrollment>('/api/v1/enrollment-tokens', {
+    const { scan_proxy, ...payload } = enrollForm.value
+    const created = await api<Enrollment>('/api/v1/enrollment-tokens', {
       method: 'POST',
-      body: JSON.stringify(enrollForm.value),
+      body: JSON.stringify(payload),
     })
+    const proxy = scan_proxy.trim()
+    if (proxy) {
+      created.install_command = `export DETECTIVE_CHICKEN_SCAN_PROXY=${shellSingleQuote(proxy)}; ${created.install_command}`
+    }
+    enrollment.value = created
   } catch (error) {
     showToast(error instanceof Error ? error.message : '创建安装命令失败')
   }
@@ -446,6 +456,7 @@ const closeEnrollment = () => {
     platform: 'auto',
     arch: 'auto',
     scan_interval_minutes: 360,
+    scan_proxy: '',
   }
 }
 
@@ -1414,6 +1425,15 @@ onBeforeUnmount(() => {
                 </select>
               </label>
             </div>
+            <label>
+              检测出口代理（可选）
+              <input
+                v-model="enrollForm.scan_proxy"
+                type="url"
+                autocomplete="off"
+                placeholder="socks5h://backend:1080 或 http://backend:8080"
+              />
+            </label>
             <div style="padding: 10px 12px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; font-size: 11px; color: var(--muted); margin-bottom: 14px;">
               <span style="color: #38bdf8; font-weight: 600;">安全保障：</span>
               注册凭证 10 分钟内有效且单次使用。Agent 私钥在服务器本机生成并用 HTTP-Signature 签名。

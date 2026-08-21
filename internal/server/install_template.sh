@@ -7,9 +7,17 @@ REQUESTED_OS='{{.OSFamily}}'
 REQUESTED_PLATFORM='{{.Platform}}'
 REQUESTED_ARCH='{{.Arch}}'
 AGENT=/usr/local/bin/detective-chicken-agent
+LOOP=/usr/local/bin/detective-chicken-loop
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Please run this installer as root." >&2
+  echo "Root privileges are required." >&2
+  if command -v sudo >/dev/null 2>&1; then
+    echo "Run: curl -fsSL '$SERVER_URL/api/v1/install/$ENROLL_TOKEN.sh' | sudo sh" >&2
+  elif command -v doas >/dev/null 2>&1; then
+    echo "Run: curl -fsSL '$SERVER_URL/api/v1/install/$ENROLL_TOKEN.sh' | doas sh" >&2
+  else
+    echo "Switch to root first, then run the installer without sudo." >&2
+  fi
   exit 1
 fi
 
@@ -56,16 +64,26 @@ detect_platform() {
   echo baremetal
 }
 
+install_package() {
+  case "$OS_FAMILY" in
+    alpine) apk add --no-cache "$@" ;;
+    debian)
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
+      ;;
+    rhel) dnf install -y "$@" 2>/dev/null || yum install -y "$@" ;;
+    arch) pacman -Sy --noconfirm "$@" ;;
+    *) return 1 ;;
+  esac
+}
+
 ensure_fetcher() {
   command -v curl >/dev/null 2>&1 && return
   command -v wget >/dev/null 2>&1 && return
-  case "$OS_FAMILY" in
-    alpine) apk add --no-cache ca-certificates curl ;;
-    debian) apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl ;;
-    rhel) (dnf install -y ca-certificates curl || yum install -y ca-certificates curl) ;;
-    arch) pacman -Sy --noconfirm ca-certificates curl ;;
-    *) echo "Install curl or wget, then run this script again." >&2; exit 1 ;;
-  esac
+  install_package ca-certificates curl || {
+    echo "Install curl or wget, then run this script again." >&2
+    exit 1
+  }
 }
 
 fetch() {
@@ -83,6 +101,7 @@ PLATFORM=$(detect_platform)
 ensure_fetcher
 
 echo "Installing Detective Chicken: os=$OS_FAMILY platform=$PLATFORM arch=$ARCH"
+[ -z "${DETECTIVE_CHICKEN_SCAN_PROXY:-}" ] || echo "Outbound scan proxy enabled; identity and service tests will use its exit IP."
 install -d -m 0700 /etc/detective-chicken
 tmp_agent=$(mktemp)
 trap 'rm -f "$tmp_agent"' EXIT
@@ -116,13 +135,48 @@ UNIT
   systemctl enable --now detective-chicken-heartbeat.timer
 }
 
+install_loop_file() {
+  cat >"$LOOP" <<'LOOP'
+#!/bin/sh
+while :; do
+  /usr/local/bin/detective-chicken-agent heartbeat >/dev/null 2>&1 || true
+  sleep 120
+done
+LOOP
+  chmod 0755 "$LOOP"
+}
+
+install_openrc() {
+  command -v rc-service >/dev/null 2>&1 || return 1
+  command -v rc-update >/dev/null 2>&1 || return 1
+  [ -d /etc/init.d ] || return 1
+  install_loop_file
+  cat >/etc/init.d/detective-chicken-heartbeat <<'OPENRC'
+#!/sbin/openrc-run
+description="Detective Chicken heartbeat"
+command="/usr/local/bin/detective-chicken-loop"
+command_background="yes"
+pidfile="/run/detective-chicken-heartbeat.pid"
+
+depend() {
+  need net
+  after firewall
+}
+OPENRC
+  chmod 0755 /etc/init.d/detective-chicken-heartbeat
+  rc-update add detective-chicken-heartbeat default >/dev/null
+  rc-service detective-chicken-heartbeat restart >/dev/null
+}
+
 install_cron() {
-  command -v crond >/dev/null 2>&1 || command -v cron >/dev/null 2>&1 || case "$OS_FAMILY" in
-    alpine) apk add --no-cache dcron ;;
-    debian) DEBIAN_FRONTEND=noninteractive apt-get install -y cron ;;
-    rhel) (dnf install -y cronie || yum install -y cronie) ;;
-    arch) pacman -S --noconfirm cronie ;;
-  esac
+  if ! command -v crond >/dev/null 2>&1 && ! command -v cron >/dev/null 2>&1; then
+    case "$OS_FAMILY" in
+      alpine) install_package dcron ;;
+      debian) install_package cron ;;
+      rhel|arch) install_package cronie ;;
+      *) return 1 ;;
+    esac || return 1
+  fi
   if [ -d /etc/cron.d ]; then
     cat >/etc/cron.d/detective-chicken <<'CRON'
 */2 * * * * root /usr/local/bin/detective-chicken-agent heartbeat >/dev/null 2>&1
@@ -136,23 +190,25 @@ CRON
   fi
   command -v rc-service >/dev/null 2>&1 && rc-service crond start >/dev/null 2>&1 || true
   command -v rc-update >/dev/null 2>&1 && rc-update add crond default >/dev/null 2>&1 || true
+  command -v service >/dev/null 2>&1 && service cron start >/dev/null 2>&1 || true
+  command -v service >/dev/null 2>&1 && service crond start >/dev/null 2>&1 || true
 }
 
 install_loop() {
-  cat >/usr/local/bin/detective-chicken-loop <<'LOOP'
-#!/bin/sh
-while :; do
-  /usr/local/bin/detective-chicken-agent heartbeat >/dev/null 2>&1 || true
-  sleep 120
-done
-LOOP
-  chmod 0755 /usr/local/bin/detective-chicken-loop
-  nohup /usr/local/bin/detective-chicken-loop >/var/log/detective-chicken-agent.log 2>&1 &
-  echo "No init/cron service was available; started a background loop. For containers, bake the installer into the image or persist /etc/detective-chicken."
+  install_loop_file
+  if [ -r /run/detective-chicken-heartbeat.pid ]; then
+    old_pid=$(cat /run/detective-chicken-heartbeat.pid 2>/dev/null || true)
+    [ -z "$old_pid" ] || kill "$old_pid" >/dev/null 2>&1 || true
+  fi
+  nohup "$LOOP" >/var/log/detective-chicken-agent.log 2>&1 &
+  echo $! >/run/detective-chicken-heartbeat.pid
+  echo "No supported init/cron service was available; started a background heartbeat loop. It must be restarted after the container reboots."
 }
 
 if command -v systemctl >/dev/null 2>&1 && [ "$(cat /proc/1/comm 2>/dev/null || true)" = systemd ]; then
   install_systemd
+elif install_openrc; then
+  echo "Installed persistent OpenRC heartbeat service."
 elif ! install_cron; then
   install_loop
 fi

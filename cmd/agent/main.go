@@ -24,16 +24,18 @@ func main() {
 	token := flag.String("token", "", "one-time enrollment token")
 	family := flag.String("family", "auto", "IP family to scan: auto, 4 or 6")
 	scriptURL := flag.String("script-url", "https://IP.Check.Place", "IPQuality script URL")
+	scanProxy := flag.String("scan-proxy", agent.ScanProxyFromEnvironment(), "outbound scan proxy: http(s):// or socks5(h)://")
+	directScan := flag.Bool("direct", false, "clear the configured scan proxy and use the local default route")
 	flag.Parse()
 	if flag.NArg() == 0 {
-		fatal("usage: detective-chicken-agent [flags] <enroll|heartbeat|scan>")
+		fatal("usage: detective-chicken-agent [flags] <enroll|heartbeat|scan|configure-egress>")
 	}
 	switch flag.Arg(0) {
 	case "enroll":
 		if *token == "" {
 			fatal("--token is required")
 		}
-		cfg, err := agent.Enroll(*serverURL, *token, *configPath)
+		cfg, err := agent.Enroll(*serverURL, *token, *configPath, strings.TrimSpace(*scanProxy))
 		if err != nil {
 			fatal(err.Error())
 		}
@@ -53,7 +55,7 @@ func main() {
 			}
 		}
 		if directive.ScanDue || hasScanCmd {
-			if err := scanAndUpload(client, *scriptURL, nil); err != nil {
+			if err := scanAndUpload(client, *scriptURL, nil, effectiveScanProxy(*scanProxy, client.Config.ScanProxy, *directScan)); err != nil {
 				fatal(err.Error())
 			}
 		}
@@ -64,8 +66,24 @@ func main() {
 		if err != nil {
 			fatal(err.Error())
 		}
-		if err = scanAndUpload(client, *scriptURL, families); err != nil {
+		if err = scanAndUpload(client, *scriptURL, families, effectiveScanProxy(*scanProxy, client.Config.ScanProxy, *directScan)); err != nil {
 			fatal(err.Error())
+		}
+	case "configure-egress":
+		value := strings.TrimSpace(*scanProxy)
+		if *directScan {
+			value = ""
+		} else if value == "" {
+			fatal("configure-egress requires --scan-proxy URL or --direct")
+		}
+		cfg, err := agent.ConfigureScanProxy(*configPath, value)
+		if err != nil {
+			fatal(err.Error())
+		}
+		if cfg.ScanProxy == "" {
+			fmt.Println("scan egress configured for the local default route")
+		} else {
+			fmt.Println("scan egress configured through the dedicated proxy")
 		}
 	default:
 		fatal("unknown command: " + flag.Arg(0))
@@ -89,7 +107,10 @@ func requestedFamilies(value string) ([]int, error) {
 	return []int{family}, nil
 }
 
-func scanAndUpload(client *agent.Client, scriptURL string, families []int) error {
+func scanAndUpload(client *agent.Client, scriptURL string, families []int, scanProxy string) error {
+	if err := agent.ValidateScanProxy(scanProxy); err != nil {
+		return err
+	}
 	if len(families) == 0 {
 		var err error
 		families, err = agent.AvailableFamilies()
@@ -105,7 +126,7 @@ func scanAndUpload(client *agent.Client, scriptURL string, families []int) error
 	results := make(chan scanResult, len(families))
 	for _, family := range families {
 		go func(family int) {
-			report, err := (agent.Adapter{ScriptURL: scriptURL}).Collect(context.Background(), family)
+			report, err := (agent.Adapter{ScriptURL: scriptURL, ProxyURL: scanProxy}).Collect(context.Background(), family)
 			results <- scanResult{family: family, report: report, err: err}
 		}(family)
 	}
@@ -137,6 +158,16 @@ func scanAndUpload(client *agent.Client, scriptURL string, families []int) error
 		return fmt.Errorf("all quality scans failed: %s", strings.Join(failures, "; "))
 	}
 	return nil
+}
+
+func effectiveScanProxy(flagValue, configured string, direct bool) string {
+	if direct {
+		return ""
+	}
+	if value := strings.TrimSpace(flagValue); value != "" {
+		return value
+	}
+	return strings.TrimSpace(configured)
 }
 
 func shortError(err error) string {

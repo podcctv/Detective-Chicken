@@ -79,3 +79,15 @@ func TestCollectorAcceptsValidJSONDespiteUpstreamExitCode(t *testing.T) {
 		t.Fatalf("valid report was discarded: %#v %v", report, err)
 	}
 }
+
+func TestExitIPHelpersRejectIngressFamilyAndNormalizeAddresses(t *testing.T) {
+	if !ipMatchesFamily("203.0.113.9", 4) || ipMatchesFamily("203.0.113.9", 6) {
+		t.Fatal("IPv4 family validation failed")
+	}
+	if !ipMatchesFamily("2001:db8::9", 6) || ipMatchesFamily("2001:db8::9", 4) {
+		t.Fatal("IPv6 family validation failed")
+	}
+	if !sameIP("2001:db8::9", "2001:0db8:0:0:0:0:0:9") {
+		t.Fatal("equivalent exit addresses were treated as a route mismatch")
+	}
+}

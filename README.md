@@ -91,6 +91,18 @@ go build -o detective-chicken-agent ./cmd/agent
 
 Agent 配置默认写入 `/etc/detective-chicken/agent.json`，权限为 `0600`。安装脚本会立即完成第一次心跳并并行扫描可用的 IPv4/IPv6，实测通常约 1–3 分钟，单次最多 8 分钟。心跳固定每 2 分钟检查一次服务器指令；质量扫描默认每 6 小时，可在创建安装命令时选择，也可在节点详情中修改为 1 小时到 1 周。服务器调度会在下一次心跳生效，因此“立即扫描”通常在 2 分钟内开始。
 
+Agent 默认检测其本机默认路由的出口 IP，不使用控制面看到的登录来源地址。前置机仅负责入口、实际检测应从后端家宽出口发起时，可在“添加 VPS”的“检测出口代理”中填写后端 `http(s)://`、`socks5://` 或 `socks5h://` 地址；该值只在浏览器本地拼入安装命令，并保存到目标机权限为 `0600` 的 Agent 配置中。原生身份探测、IPQuality 和 AI/流媒体探测会共用这一出口，并拒绝上传两个探测器出口不一致的报告。
+
+已部署节点无需重新注册即可切换出口：
+
+```bash
+sudo detective-chicken-agent --scan-proxy 'socks5h://backend.example:1080' configure-egress
+sudo detective-chicken-agent scan
+
+# 恢复使用 Agent 本机默认路由
+sudo detective-chicken-agent --direct configure-egress
+```
+
 ## API 与测试
 
 - OpenAPI: [`openapi/openapi.yaml`](openapi/openapi.yaml)

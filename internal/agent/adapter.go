@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -28,6 +30,7 @@ func stripANSI(b []byte) []byte {
 type Adapter struct {
 	ScriptURL string
 	Timeout   time.Duration
+	ProxyURL  string
 }
 
 func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) {
@@ -44,6 +47,9 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	if err := ValidateScanProxy(a.ProxyURL); err != nil {
+		return model.Report{}, err
+	}
 
 	type nativePack struct {
 		results  map[string]prober.ProbeResult
@@ -51,7 +57,7 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	}
 	nativeChan := make(chan nativePack, 1)
 	go func() {
-		p := prober.NewProber(family, 6*time.Second)
+		p := prober.NewProber(family, 6*time.Second).WithProxy(a.ProxyURL)
 		ident := p.ProbeNetworkIdentity(ctx)
 		res := p.RunAll(ctx)
 		nativeChan <- nativePack{results: res, identity: ident}
@@ -63,6 +69,9 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 		flag = "-6"
 	}
 	cmd := exec.CommandContext(ctx, "bash", "-c", `curl -fsSL --proto '=https' --tlsv1.2 "$1" | bash -s -- "$2" -j -p -f`, "detective-chicken-ipquality", url, flag)
+	if a.ProxyURL != "" {
+		cmd.Env = append(os.Environ(), "HTTP_PROXY="+a.ProxyURL, "HTTPS_PROXY="+a.ProxyURL, "ALL_PROXY="+a.ProxyURL)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -101,31 +110,38 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	} else if collectErr != nil {
 		return model.Report{}, collectErr
 	}
+	if identity.IP != "" && !ipMatchesFamily(identity.IP, family) {
+		return model.Report{}, fmt.Errorf("outbound route returned %s while scanning IPv%d", identity.IP, family)
+	}
+	if report.Network.ReportedIP != "" && identity.IP != "" && !sameIP(report.Network.ReportedIP, identity.IP) {
+		return model.Report{}, fmt.Errorf("collector route mismatch: upstream exit %s differs from native probe exit %s", report.Network.ReportedIP, identity.IP)
+	}
 
-	// If upstream failed to find reported IP, use native prober detected IP
-	if report.Network.ReportedIP == "" && identity.IP != "" {
+	// The native identity probe and every unlock probe share one transport. Use
+	// that observed address as the canonical exit instead of any ingress/local IP.
+	if identity.IP != "" {
 		report.Network.ReportedIP = identity.IP
 	}
 	report.Network.IsWARP = identity.IsWARP
-	if report.Quality.ASN == 0 && identity.ASN > 0 {
+	if identity.ASN > 0 {
 		report.Quality.ASN = identity.ASN
 	}
-	if report.Quality.Organization == "" && identity.Organization != "" {
+	if identity.Organization != "" {
 		report.Quality.Organization = identity.Organization
 	}
-	if report.Quality.CountryCode == "" && identity.CountryCode != "" {
+	if identity.CountryCode != "" {
 		report.Quality.CountryCode = identity.CountryCode
 	}
-	if report.Quality.City == "" && identity.City != "" {
+	if identity.City != "" {
 		report.Quality.City = identity.City
 	}
-	if report.Quality.Latitude == 0 && identity.Latitude != 0 {
+	if identity.Latitude != 0 {
 		report.Quality.Latitude = identity.Latitude
 	}
-	if report.Quality.Longitude == 0 && identity.Longitude != 0 {
+	if identity.Longitude != 0 {
 		report.Quality.Longitude = identity.Longitude
 	}
-	if report.Quality.UsageType == "" && identity.UsageType != "" {
+	if identity.UsageType != "" {
 		report.Quality.UsageType = normalizeUsageLabel(identity.UsageType)
 	}
 	if identity.IsWARP {
@@ -133,6 +149,12 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 			report.Quality.Factors = make(map[string]any)
 		}
 		report.Quality.Factors["WARP"] = true
+	}
+	if a.ProxyURL != "" {
+		if report.Quality.Factors == nil {
+			report.Quality.Factors = make(map[string]any)
+		}
+		report.Quality.Factors["ScanProxy"] = true
 	}
 
 	// Merge Native Prober results into report.Quality.Media
@@ -144,6 +166,20 @@ func (a Adapter) Collect(ctx context.Context, family int) (model.Report, error) 
 	}
 
 	return report, nil
+}
+
+func ipMatchesFamily(value string, family int) bool {
+	ip := net.ParseIP(strings.TrimSpace(value))
+	if ip == nil {
+		return false
+	}
+	return family == 4 && ip.To4() != nil || family == 6 && ip.To4() == nil && ip.To16() != nil
+}
+
+func sameIP(left, right string) bool {
+	a := net.ParseIP(strings.TrimSpace(left))
+	b := net.ParseIP(strings.TrimSpace(right))
+	return a != nil && b != nil && a.Equal(b)
 }
 
 func finishCollection(stdout []byte, stderr string, runErr error, family int) (model.Report, error) {
