@@ -196,8 +196,8 @@ const selectCard = () => props.interactive && emit('select', props.node)
 .metal-credit-card.hovering { transform: translateY(-2px); border-color: rgba(226, 232, 240, .22); box-shadow: 0 19px 42px rgba(0, 0, 0, .58), inset 0 1px 0 rgba(255, 255, 255, .18); }
 .is-selected .metal-credit-card { border-color: rgba(56, 189, 248, .56); box-shadow: 0 18px 42px rgba(0, 0, 0, .62), inset 0 1px 0 rgba(186, 230, 253, .2); }
 .card-metal-sheen { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0, rgba(255,255,255,.018) 1px, transparent 1px, transparent 4px), linear-gradient(115deg, rgba(255,255,255,.055), transparent 24%, transparent 74%, rgba(255,255,255,.025)); }
-.card-flag-container { position: absolute; inset: 0 0 0 auto; z-index: -1; width: 40%; opacity: .075; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,.25) 25%, rgba(0,0,0,.8) 100%); -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,.25) 25%, rgba(0,0,0,.8) 100%); }
-.card-flag-img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(55%) saturate(55%) contrast(95%) brightness(1.05); }
+.card-flag-container { position: absolute; inset: 0 0 0 auto; z-index: -1; width: 42%; opacity: .12; overflow: hidden; pointer-events: none; mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,.34) 24%, rgba(0,0,0,.9) 100%); -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,.34) 24%, rgba(0,0,0,.9) 100%); }
+.card-flag-img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(35%) saturate(70%) contrast(100%) brightness(1.03); }
 .card-border-glow { position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.035); }
 .card-header, .card-identity-block, .card-network-row, .card-unlocks-footer { position: relative; z-index: 2; }
 .card-header { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }

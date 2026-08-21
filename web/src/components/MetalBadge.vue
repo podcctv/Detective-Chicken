@@ -284,6 +284,7 @@ const regionMatchesNode = computed(() =>
 }
 .status-blocked .brand-logo-wrap {
   background: rgba(255, 255, 255, 0.035);
+  filter: grayscale(100%) opacity(0.5);
 }
 .status-blocked .status-gem {
   background: #ef4444;
