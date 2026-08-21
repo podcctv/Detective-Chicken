@@ -59,6 +59,7 @@ func (a *API) routes(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"items": a.store.NodesFor(p.User.ID, p.User.Role == "admin")})
 	}))
 	mux.HandleFunc("GET /api/v1/nodes/{id}", a.authenticated(a.node))
+	mux.HandleFunc("DELETE /api/v1/nodes/{id}", a.authenticated(a.deleteNode))
 	mux.HandleFunc("PATCH /api/v1/nodes/{id}/settings", a.authenticated(a.nodeSettings))
 	mux.HandleFunc("GET /api/v1/nodes/{id}/series", a.authenticated(a.series))
 	mux.HandleFunc("GET /api/v1/alerts", a.authenticated(func(w http.ResponseWriter, r *http.Request) {
@@ -72,13 +73,14 @@ func (a *API) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/agents/register", a.register)
 	mux.HandleFunc("POST /api/v1/heartbeats", a.signed(a.heartbeat))
 	mux.HandleFunc("POST /api/v1/reports", a.signed(a.report))
+	mux.HandleFunc("POST /api/v1/agents/uninstall-ack", a.signed(a.uninstallAck))
 	mux.HandleFunc("GET /api/v1/agents/commands", a.signed(a.commands))
 }
 
 func (a *API) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Digest, Signature-Input, Signature")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if r.Method == http.MethodOptions {
@@ -99,6 +101,20 @@ func (a *API) node(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, n)
+}
+func (a *API) deleteNode(w http.ResponseWriter, r *http.Request) {
+	p := requestPrincipal(r)
+	force := r.URL.Query().Get("force") == "true"
+	agents, err := a.store.DeleteNode(r.PathValue("id"), p.User.ID, p.User.Role == "admin", force)
+	if err != nil {
+		apiError(w, http.StatusNotFound, "NODE_NOT_FOUND", "node not found")
+		return
+	}
+	if force || agents == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true, "uninstall_queued": agents})
 }
 func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	p := requestPrincipal(r)
@@ -257,18 +273,45 @@ func (a *API) heartbeat(w http.ResponseWriter, r *http.Request, body []byte, age
 	if h.ObservedAt.IsZero() {
 		h.ObservedAt = time.Now().UTC()
 	}
+	commands := a.store.Commands(agent.AgentID)
+	for _, command := range commands {
+		if command.Type == "uninstall" {
+			writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true, "scan_due": false, "commands": commands})
+			return
+		}
+	}
 	if err := a.store.SaveHeartbeat(h); err != nil {
 		apiError(w, 404, "NODE_NOT_FOUND", err.Error())
 		return
 	}
 	due, interval, _ := a.store.ScanDirective(agent.NodeID)
-	commands := a.store.Commands(agent.AgentID)
 	for _, command := range commands {
 		if command.Type == "scan" {
 			due = true
 		}
 	}
 	writeJSON(w, 202, map[string]any{"accepted": true, "scan_due": due, "scan_interval_minutes": interval, "commands": commands})
+}
+
+func (a *API) uninstallAck(w http.ResponseWriter, r *http.Request, body []byte, agent store.AgentKey) {
+	var in struct {
+		AgentID   string `json:"agent_id"`
+		NodeID    string `json:"node_id"`
+		CommandID string `json:"command_id"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil {
+		apiError(w, http.StatusBadRequest, "INVALID_PAYLOAD", err.Error())
+		return
+	}
+	if in.AgentID != agent.AgentID || in.NodeID != agent.NodeID || in.CommandID == "" {
+		apiError(w, http.StatusForbidden, "AGENT_FORBIDDEN", "agent identity does not match payload")
+		return
+	}
+	if err := a.store.CompleteAgentUninstall(agent.AgentID, agent.NodeID, in.CommandID); err != nil {
+		apiError(w, http.StatusNotFound, "AGENT_NOT_FOUND", "agent not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"accepted": true})
 }
 
 func (a *API) nodeTasks(w http.ResponseWriter, r *http.Request) {

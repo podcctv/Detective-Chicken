@@ -49,6 +49,16 @@ func main() {
 		fmt.Printf("heartbeat accepted; quality interval %s\n", formatInterval(directive.ScanIntervalMinutes))
 		hasScanCmd := false
 		for _, cmd := range directive.Commands {
+			if cmd.Type == "uninstall" {
+				if err := client.AcknowledgeUninstall(cmd.ID); err != nil {
+					fatal("acknowledge uninstall: " + err.Error())
+				}
+				if err := agent.RunLocalUninstall(); err != nil {
+					fatal(err.Error())
+				}
+				fmt.Println("Detective Chicken agent removed from this host")
+				return
+			}
 			if cmd.Type == "scan" {
 				hasScanCmd = true
 				break

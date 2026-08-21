@@ -206,7 +206,7 @@ const regionMatchesNode = computed(() =>
       <div v-else class="brand-generic-char">
         {{ (name || serviceId).slice(0, 2).toUpperCase() }}
       </div>
-      <span v-if="isYouTubeCN" class="compact-cn-tag">送中</span>
+      <span v-if="isYouTubeCN" class="compact-cn-tag" title="中国区路由" aria-label="中国区路由">CN</span>
     </div>
     <span v-if="!showLabel" class="compact-status-dot" aria-hidden="true"></span>
 
@@ -325,16 +325,21 @@ const regionMatchesNode = computed(() =>
 }
 .compact-cn-tag {
   position: absolute;
-  right: -7px;
-  bottom: -6px;
+  right: -6px;
+  bottom: -5px;
   z-index: 3;
-  padding: 0 3px;
+  width: 16px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 222, 89, 0.72);
   border-radius: 4px;
-  background: #f59e0b;
-  color: #111827;
-  font-size: 7px;
-  font-weight: 700;
-  line-height: 12px;
+  background: #de2910;
+  color: #ffde59;
+  font-family: 'Fira Code', monospace;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
   white-space: nowrap;
 }
 .compact-status-dot {
@@ -376,10 +381,10 @@ const regionMatchesNode = computed(() =>
   height: 12px;
 }
 .badge-sm .badge-title {
-  font-size: 10px;
+  font-size: 11px;
 }
 .badge-sm .status-desc {
-  font-size: 8.5px;
+  font-size: 10px;
 }
 
 .badge-lg {
@@ -427,8 +432,8 @@ const regionMatchesNode = computed(() =>
 .badge-title {
   min-width: 0;
   overflow: hidden;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
   color: #f8fafc;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -437,8 +442,8 @@ const regionMatchesNode = computed(() =>
   flex: none;
   margin-left: auto;
   font-family: 'Fira Code', monospace;
-  font-size: 8.5px;
-  font-weight: 600;
+  font-size: 9.5px;
+  font-weight: 650;
   color: #7dd3fc;
 }
 .badge-region-tag.is-local {
@@ -449,8 +454,8 @@ const regionMatchesNode = computed(() =>
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 9.5px;
-  color: #94a3b8;
+  font-size: 10.5px;
+  color: #a7b2c0;
   white-space: nowrap;
   min-width: 0;
 }
@@ -464,8 +469,8 @@ const regionMatchesNode = computed(() =>
   margin-left: auto;
   flex: none;
   font-family: 'Fira Code', monospace;
-  font-size: 8.5px;
-  color: #8b97a4;
+  font-size: 9.5px;
+  color: #a0acb9;
   font-variant-numeric: tabular-nums;
 }
 </style>

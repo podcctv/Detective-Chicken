@@ -65,6 +65,7 @@
 
 html {
   scroll-behavior: smooth;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -77,6 +78,7 @@ body {
   font-size: 13.5px;
   line-height: 1.5;
   overflow-x: hidden;
+  text-rendering: optimizeLegibility;
 }
 
 button, input, select {
@@ -254,6 +256,7 @@ button {
 /* Main Content Area */
 .main-content {
   flex: 1;
+  min-width: 0;
   min-height: 100vh;
   margin-left: 230px;
   padding: 0 24px 24px;
@@ -382,6 +385,34 @@ button {
   background: var(--surface-2);
   border-color: var(--border-strong);
 }
+
+.danger-btn,
+.danger-ghost-btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+.danger-btn {
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: #b91c1c;
+  color: #fff;
+}
+.danger-btn:hover { background: #dc2626; border-color: #fca5a5; }
+.danger-ghost-btn {
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: transparent;
+  color: #f87171;
+}
+.danger-ghost-btn:hover { background: rgba(239, 68, 68, 0.1); border-color: #f87171; }
+.danger-btn:disabled,
+.danger-ghost-btn:disabled { cursor: wait; opacity: 0.58; }
 
 /* 3D Perspective Tilt Card System */
 .tilt-container {
@@ -1464,6 +1495,48 @@ tbody tr:hover {
   color: #c084fc;
   border-color: #c084fc;
 }
+.table-action-btn.delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border-color: #f87171;
+}
+
+.delete-node-modal { width: min(560px, 100%); }
+.delete-node-body { display: grid; gap: 18px; padding: 20px; }
+.delete-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 7px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+}
+.delete-warning svg { flex: none; margin-top: 1px; }
+.delete-warning strong { display: block; color: var(--text); font-size: 13.5px; }
+.delete-warning span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.delete-node-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 1440px) {
+  body { font-size: 14px; }
+  .page-heading p,
+  .kpi-card small,
+  .fleet-head p { color: var(--muted); font-size: 12px; }
+  .kpi-card span { font-size: 11px; }
+  .kpi-card strong { font-size: 18px; }
+  .table-wrap th { font-size: 11px; }
+  .table-wrap td { font-size: 12.5px; line-height: 1.45; }
+  .table-action-btn { min-height: 30px; font-size: 11.5px; }
+  .unlock-card-head strong { font-size: 12.5px; }
+  .unlock-card-quality { font-size: 11.5px; }
+  .unlock-card-foot { font-size: 10.5px; line-height: 1.45; }
+}
+
+@media (max-width: 620px) {
+  .delete-node-actions { align-items: stretch; flex-direction: column-reverse; }
+  .delete-node-actions button { width: 100%; min-height: 42px; }
+}
 
 /* Task & Diagnostics Modal */
 .task-modal {
@@ -1638,4 +1711,3 @@ tbody tr:hover {
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-

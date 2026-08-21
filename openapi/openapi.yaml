@@ -39,6 +39,17 @@ paths:
       responses:
         "200": { description: Node detail }
         "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteNode
+      description: Removes the control-plane node immediately and queues a persistent remote uninstall command for every enrolled agent. Use force only when the remote agent is permanently unreachable.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: force, in: query, required: false, schema: { type: boolean, default: false } }
+      security: [{ sessionCookie: [] }]
+      responses:
+        "202": { description: Node deleted and remote uninstall queued }
+        "204": { description: Node deleted without a remote agent or force deletion completed }
+        "404": { $ref: "#/components/responses/NotFound" }
   /nodes/{id}/series:
     get:
       operationId: getNodeSeries
@@ -181,6 +192,13 @@ paths:
       security: [{ enrollmentToken: [] }]
       responses:
         "201": { description: Agent registered }
+  /agents/uninstall-ack:
+    post:
+      operationId: acknowledgeAgentUninstall
+      description: Signed acknowledgement sent before the agent removes its local services, configuration and binary.
+      security: [{ httpMessageSignature: [] }]
+      responses:
+        "200": { description: Agent credential revoked and uninstall acknowledged }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /heartbeats:
     post:

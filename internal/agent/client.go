@@ -20,7 +20,7 @@ import (
 	"github.com/podcctv/detective-chicken/internal/model"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 type Config struct {
 	ServerURL  string `json:"server_url"`
@@ -198,6 +198,11 @@ func (c *Client) Upload(report model.Report) error {
 	report.AgentID = c.Config.AgentID
 	report.NodeID = c.Config.NodeID
 	return c.post("/api/v1/reports", report)
+}
+func (c *Client) AcknowledgeUninstall(commandID string) error {
+	return c.post("/api/v1/agents/uninstall-ack", map[string]string{
+		"agent_id": c.Config.AgentID, "node_id": c.Config.NodeID, "command_id": commandID,
+	})
 }
 func (c *Client) post(path string, payload any) error {
 	res, err := c.signed(http.MethodPost, path, payload)

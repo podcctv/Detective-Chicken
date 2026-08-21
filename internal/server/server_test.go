@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -108,6 +109,61 @@ func TestEnrollmentRegistrationAndSignedHeartbeat(t *testing.T) {
 	api.Handler().ServeHTTP(res, req)
 	if res.Code != 409 {
 		t.Fatalf("expected replay detection, got %d", res.Code)
+	}
+}
+
+func TestDeleteNodeQueuesAndAcknowledgesRemoteUninstall(t *testing.T) {
+	api, st := testAPI()
+	cookie, out := registerUser(t, api, "delete-owner", "correct-horse-battery")
+	owner := out["user"].(map[string]any)
+	enrollment := st.CreateEnrollment("tenant-delete", owner["id"].(string), "Delete Me", "Demo", "US", "auto", "auto", "auto", 360)
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	node, agentKey, err := st.Register(enrollment.Token, pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := httptest.NewRecorder()
+	req := withCookie(httptest.NewRequest(http.MethodDelete, "/api/v1/nodes/"+node.ID, nil), cookie)
+	api.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusAccepted || !strings.Contains(res.Body.String(), `"uninstall_queued":1`) {
+		t.Fatalf("delete node: %d %s", res.Code, res.Body.String())
+	}
+	if _, err := st.Node(node.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("deleted node remains visible: %v", err)
+	}
+
+	heartbeat, _ := json.Marshal(map[string]any{
+		"agent_id": agentKey.AgentID, "node_id": node.ID, "observed_at": time.Now().UTC(), "agent_version": "test",
+	})
+	res = httptest.NewRecorder()
+	req = signedRequest(t, http.MethodPost, "/api/v1/heartbeats", heartbeat, agentKey.AgentID, priv, "delete-heartbeat")
+	api.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusAccepted || !strings.Contains(res.Body.String(), `"type":"uninstall"`) {
+		t.Fatalf("uninstall command was not delivered: %d %s", res.Code, res.Body.String())
+	}
+	res = httptest.NewRecorder()
+	req = signedRequest(t, http.MethodPost, "/api/v1/heartbeats", heartbeat, agentKey.AgentID, priv, "delete-heartbeat-retry")
+	api.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusAccepted || !strings.Contains(res.Body.String(), `"type":"uninstall"`) {
+		t.Fatalf("unacknowledged uninstall command was not retained: %d %s", res.Code, res.Body.String())
+	}
+
+	pending := st.Commands(agentKey.AgentID)
+	if len(pending) != 1 || pending[0].Type != "uninstall" {
+		t.Fatalf("unexpected pending uninstall commands: %#v", pending)
+	}
+	ack, _ := json.Marshal(map[string]string{
+		"agent_id": agentKey.AgentID, "node_id": node.ID, "command_id": pending[0].ID,
+	})
+	res = httptest.NewRecorder()
+	req = signedRequest(t, http.MethodPost, "/api/v1/agents/uninstall-ack", ack, agentKey.AgentID, priv, "delete-ack")
+	api.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("uninstall acknowledgement: %d %s", res.Code, res.Body.String())
+	}
+	if _, err := st.Agent(agentKey.AgentID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("uninstalled agent credential remains active: %v", err)
 	}
 }
 

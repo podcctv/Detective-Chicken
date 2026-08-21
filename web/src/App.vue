@@ -45,6 +45,7 @@ import {
   ShieldCheck,
   Sun,
   Terminal,
+  Trash2,
   Tv,
   UserCog,
   Wrench,
@@ -526,6 +527,8 @@ const closeEnrollment = () => {
 
 const reinstallModalOpen = ref(false)
 const reinstallData = ref<{ nodeId: string; nodeName: string; installCommand: string; installUrl: string } | null>(null)
+const deleteCandidate = ref<Node | NodeDetail | null>(null)
+const deleteBusy = ref(false)
 
 const triggerReinstall = async (node: Node | NodeDetail) => {
   try {
@@ -542,6 +545,35 @@ const triggerReinstall = async (node: Node | NodeDetail) => {
     reinstallModalOpen.value = true
   } catch (error) {
     showToast(error instanceof Error ? error.message : '生成重装命令失败')
+  }
+}
+
+const requestNodeDelete = (node: Node | NodeDetail) => {
+  deleteCandidate.value = node
+}
+
+const confirmNodeDelete = async (force = false) => {
+  const node = deleteCandidate.value
+  if (!node || deleteBusy.value) return
+  deleteBusy.value = true
+  try {
+    const suffix = force ? '?force=true' : ''
+    await api(`/api/v1/nodes/${node.id}${suffix}`, { method: 'DELETE' })
+    stopTaskPolling()
+    if (selected.value?.id === node.id) selected.value = null
+    if (logNode.value?.id === node.id) {
+      logModalOpen.value = false
+      logNode.value = null
+      nodeTasks.value = []
+    }
+    compareNodeIds.value = compareNodeIds.value.filter((id) => id !== node.id)
+    deleteCandidate.value = null
+    await loadDashboard()
+    showToast(force ? `${node.name} 的控制面记录已强制删除` : `${node.name} 已删除，远端探针卸载指令已下发`)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '删除节点失败')
+  } finally {
+    deleteBusy.value = false
   }
 }
 
@@ -658,6 +690,7 @@ const closeOverlay = (event: KeyboardEvent) => {
     adminOpen.value = false
     passwordOpen.value = false
     compareModalOpen.value = false
+    deleteCandidate.value = null
   }
 }
 
@@ -1002,6 +1035,14 @@ onBeforeUnmount(() => {
                       <FileText :size="13" />
                       <span>任务日志</span>
                     </button>
+                    <button
+                      class="table-action-btn delete"
+                      title="卸载远端探针并删除节点"
+                      @click="requestNodeDelete(node)"
+                    >
+                      <Trash2 :size="13" />
+                      <span>删除节点</span>
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -1290,6 +1331,9 @@ onBeforeUnmount(() => {
 
           <div class="drawer-actions">
             <button class="secondary-btn" @click="selected = null">关闭</button>
+            <button class="danger-btn" @click="requestNodeDelete(selected)">
+              <Trash2 :size="15" /> 删除节点
+            </button>
             <button class="secondary-btn" @click="triggerReinstall(selected)">
               <Wrench :size="15" /> 重装小鸡探针
             </button>
@@ -1410,6 +1454,41 @@ onBeforeUnmount(() => {
       @close="compareModalOpen = false"
       @remove-node="removeCompareNode"
     />
+
+    <!-- Node deletion and remote agent uninstall confirmation -->
+    <Transition name="modal">
+      <div v-if="deleteCandidate" class="modal-backdrop" @click.self="deleteCandidate = null">
+        <section class="modal delete-node-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-node-title">
+          <div class="modal-head">
+            <div>
+              <h2 id="delete-node-title">删除 {{ deleteCandidate.name }}</h2>
+              <p>{{ deleteCandidate.provider || 'VPS' }} · {{ deleteCandidate.masked_ip }}</p>
+            </div>
+            <button class="icon-btn" aria-label="取消删除" @click="deleteCandidate = null">
+              <X :size="18" />
+            </button>
+          </div>
+          <div class="delete-node-body">
+            <div class="delete-warning">
+              <AlertTriangle :size="20" />
+              <div>
+                <strong>节点数据和检测历史将被永久删除</strong>
+                <span>默认同时向远端下发卸载指令，清理探针服务、配置和程序文件；旧版探针需先重装升级。</span>
+              </div>
+            </div>
+            <div class="delete-node-actions">
+              <button class="secondary-btn" :disabled="deleteBusy" @click="deleteCandidate = null">取消</button>
+              <button class="danger-ghost-btn" :disabled="deleteBusy" title="远端失联时仅删除控制面记录" @click="confirmNodeDelete(true)">
+                仅强制删除记录
+              </button>
+              <button class="danger-btn" :disabled="deleteBusy" @click="confirmNodeDelete(false)">
+                <Trash2 :size="15" /> {{ deleteBusy ? '正在处理...' : '远端卸载并删除' }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Transition>
 
     <!-- Reinstall VPS Modal -->
     <Transition name="modal">

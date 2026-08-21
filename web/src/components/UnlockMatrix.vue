@@ -507,6 +507,7 @@ const hideCellTooltip = () => {
 <style scoped>
 .unlock-matrix-deck {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 14px;
 }
@@ -547,8 +548,8 @@ const hideCellTooltip = () => {
 
 .summary-metric span {
   display: block;
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 12px;
+  color: #a8b4c2;
 }
 .summary-metric strong {
   display: block;
@@ -560,8 +561,9 @@ const hideCellTooltip = () => {
 }
 .summary-metric small {
   display: block;
-  font-size: 10px;
-  color: #64748b;
+  font-size: 11px;
+  color: #8794a6;
+  line-height: 1.4;
 }
 
 .text-good { color: #10b981 !important; }
@@ -690,7 +692,10 @@ const hideCellTooltip = () => {
 
 /* Table View */
 .matrix-table-wrap {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   background: #0c1117;
@@ -698,6 +703,7 @@ const hideCellTooltip = () => {
 
 .matrix-table {
   width: 100%;
+  min-width: max-content;
   border-collapse: collapse;
 }
 
@@ -707,7 +713,8 @@ const hideCellTooltip = () => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   border-right: 1px solid rgba(255, 255, 255, 0.04);
   text-align: center;
-  font-size: 11px;
+  font-size: 12px;
+  color: #cbd5e1;
 }
 
 .col-sticky-node {
@@ -715,7 +722,7 @@ const hideCellTooltip = () => {
   left: 0;
   z-index: 10;
   background: #131922;
-  min-width: 220px;
+  min-width: 236px;
   text-align: left !important;
 }
 
@@ -728,10 +735,33 @@ const hideCellTooltip = () => {
 }
 
 .matrix-row td {
-  padding: 8px 6px;
+  padding: 9px 7px;
   text-align: center;
   vertical-align: middle;
   border-right: 1px solid rgba(255, 255, 255, 0.03);
+}
+.col-service-th,
+.matrix-cell {
+  min-width: 48px;
+}
+.node-th-content,
+.service-th-content {
+  line-height: 1.35;
+}
+.node-th-content small,
+.node-cell-meta small {
+  display: block;
+  margin-top: 2px;
+  color: #8794a6;
+  font-size: 11px;
+}
+.svc-name {
+  display: block;
+  max-width: 76px;
+  overflow: hidden;
+  color: #dbe5ef;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .node-cell-flex {
@@ -743,7 +773,7 @@ const hideCellTooltip = () => {
 }
 .country-pill {
   font-family: 'Fira Code', monospace;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   padding: 2px 5px;
   background: rgba(56, 189, 248, 0.15);
@@ -757,12 +787,13 @@ const hideCellTooltip = () => {
   gap: 6px;
 }
 .node-title-row strong {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 650;
   color: #f8fafc;
 }
 .risk-mini-badge {
   font-family: 'Fira Code', monospace;
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 800;
   padding: 0 4px;
   border-radius: 3px;
@@ -857,15 +888,16 @@ const hideCellTooltip = () => {
   position: fixed;
   z-index: 1000;
   transform: translate(-50%, -100%);
-  width: 220px;
-  padding: 10px 12px;
+  width: 248px;
+  padding: 12px 14px;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(56, 189, 248, 0.35);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   pointer-events: none;
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 .popover-head {
   display: flex;
@@ -876,7 +908,7 @@ const hideCellTooltip = () => {
   margin-bottom: 6px;
 }
 .popover-status-badge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 4px;
@@ -891,12 +923,28 @@ const hideCellTooltip = () => {
   justify-content: space-between;
   margin-bottom: 4px;
 }
-.popover-row span { color: #94a3b8; }
+.popover-row span { color: #b0bbc8; }
 .popover-desc {
-  font-size: 10px;
-  color: #64748b;
-  margin-top: 4px;
+  font-size: 12px;
+  color: #98a6b6;
+  margin-top: 6px;
   border-top: 1px dashed rgba(255, 255, 255, 0.08);
-  padding-top: 4px;
+  padding-top: 6px;
+}
+
+@media (max-width: 1440px) {
+  .banner-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary-metric { min-height: 48px; }
+  .matrix-toolbar { align-items: flex-start; }
+  .matrix-table th { padding-block: 11px; }
+  .matrix-row td { padding-block: 10px; }
+}
+
+@media (max-width: 720px) {
+  .banner-summary { grid-template-columns: 1fr; gap: 12px; }
+  .matrix-banner { padding: 14px; }
+  .toolbar-right, .search-box { width: 100%; }
+  .search-box input { width: 100%; min-width: 0; }
+  .matrix-cards-deck { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

@@ -60,9 +60,11 @@ const normalizedCountryCode = computed(() => {
   return Object.entries(map).find(([key]) => region.includes(key))?.[1] || ''
 })
 const usageLabel = computed(() => props.node.usage_type || 'WAITING')
-const locationUsageBadge = computed(() =>
-  `${props.node.country_code || props.node.region || '—'} · ${usageLabel.value}`,
-)
+const locationUsageBadge = computed(() => {
+  const labels = [props.node.country_code || props.node.region || '—', usageLabel.value]
+  if (props.node.ip_type) labels.push(props.node.ip_type)
+  return labels.join(' · ')
+})
 const families = computed(() => {
   const values = props.node.families?.length ? props.node.families : [props.node.family]
   return values.filter((family, index): family is number =>
@@ -85,7 +87,6 @@ const ipRows = computed(() => {
 })
 const asnDisplay = computed(() => props.node.asn > 0 ? `AS${props.node.asn}` : '—')
 const organizationDisplay = computed(() => props.node.organization || '—')
-const ipTypeDisplay = computed(() => props.node.ip_type || '—')
 const statusDisplay = computed(() => ({
   online: '在线', warning: '注意', alert: '告警', offline: '离线', pending: '待接入',
 }[props.node.status] || '未知'))
@@ -142,9 +143,6 @@ const selectCard = () => props.interactive && emit('select', props.node)
             <span v-if="row.warp" class="warp-badge">WARP</span>
           </div>
         </div>
-        <span class="ip-type-badge" :class="node.ip_type === '广播' ? 'type-broadcast' : node.ip_type === '原生' ? 'type-native' : 'type-unknown'">
-          {{ ipTypeDisplay }}
-        </span>
       </section>
 
       <section class="card-network-row" aria-label="网络归属信息">
@@ -202,42 +200,38 @@ const selectCard = () => props.interactive && emit('select', props.node)
 .card-header, .card-identity-block, .card-network-row, .card-unlocks-footer { position: relative; z-index: 2; }
 .card-header { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .card-issuer-row { min-width: 0; display: flex; align-items: center; gap: 7px; }
-.region-usage-pill { flex: none; padding: 2px 6px; border: 1px solid rgba(125,211,252,.28); border-radius: 4px; background: rgba(56,189,248,.09); color: #8bd8f8; font: 600 9px/1.35 'Fira Code', monospace; letter-spacing: .02em; }
+.region-usage-pill { flex: none; padding: 3px 7px; border: 1px solid rgba(125,211,252,.32); border-radius: 4px; background: rgba(56,189,248,.1); color: #9cdef9; font: 650 10px/1.35 'Fira Code', monospace; letter-spacing: 0; }
 .issuer-title { min-width: 0; overflow: hidden; color: #e5eaf0; font-size: 12px; font-weight: 650; letter-spacing: .045em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .issuer-region-text { overflow: hidden; color: #7f8a98; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .risk-medal { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 25px; padding: 3px 8px 3px 4px; border: 1px solid rgba(148,163,184,.18); border-radius: 999px; background: rgba(4,7,10,.42); color: #94a3b8; }
-.risk-number { min-width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font: 600 9px/1 'Fira Code', monospace; }
-.risk-text { font-size: 9px; font-weight: 550; }
+.risk-number { min-width: 19px; height: 19px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font: 650 10px/1 'Fira Code', monospace; }
+.risk-text { font-size: 10px; font-weight: 600; }
 .risk-pure { color: #47cfa0; } .risk-low { color: #7dd3fc; } .risk-mid { color: #f5bd57; } .risk-high { color: #f17878; }
 .risk-waiting { color: #7c8794; border-style: dashed; }
 .card-identity-block { min-height: 78px; }
 .node-name { margin: 0 0 7px; overflow: hidden; color: #f3f5f7; font-size: 21px; font-weight: 650; letter-spacing: .01em; line-height: 1.12; text-overflow: ellipsis; white-space: nowrap; }
 .ip-stack { width: min(100%, 340px); display: grid; gap: 3px; }
 .ip-row { min-width: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: start; gap: 7px; }
-.ip-version { color: #7c8794; font: 500 8px/1.2 'Fira Code', monospace; letter-spacing: .05em; text-transform: uppercase; }
-.ip-digits { min-width: 0; color: #cbd3dc; font: 550 12px/1.35 'Fira Code', monospace; letter-spacing: 0; overflow-wrap: anywhere; white-space: normal; }
-.warp-badge, .ip-type-badge { padding: 1px 5px; border: 1px solid rgba(148,163,184,.22); border-radius: 3px; font-size: 8px; font-weight: 650; line-height: 1.45; }
+.ip-version { color: #919daa; font: 550 9px/1.3 'Fira Code', monospace; letter-spacing: 0; text-transform: uppercase; }
+.ip-digits { min-width: 0; color: #d5dce4; font: 600 13px/1.4 'Fira Code', monospace; letter-spacing: 0; overflow-wrap: anywhere; white-space: normal; }
+.warp-badge { padding: 1px 5px; border: 1px solid rgba(148,163,184,.22); border-radius: 3px; font-size: 9px; font-weight: 650; line-height: 1.45; }
 .warp-badge { color: #f2be62; background: rgba(245,158,11,.09); border-color: rgba(245,158,11,.28); }
-.ip-type-badge { display: inline-block; margin-top: 6px; color: #8995a3; }
-.type-native { color: #55cfa4; background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.24); }
-.type-broadcast { color: #80cbed; background: rgba(56,189,248,.08); border-color: rgba(56,189,248,.24); }
-.type-unknown { border-style: dashed; }
 .card-network-row { min-width: 0; display: grid; grid-template-columns: minmax(76px,.8fr) minmax(0,1.45fr) minmax(58px,auto); gap: 9px; padding: 8px 10px; border: 1px solid rgba(226,232,240,.065); border-radius: 7px; background: rgba(1,4,7,.31); box-shadow: inset 0 1px 5px rgba(0,0,0,.32); }
 .meta-item { min-width: 0; display: flex; flex-direction: column; gap: 2px; } .status-item { align-items: flex-end; }
-.meta-label { color: #66717f; font-size: 7px; font-weight: 600; letter-spacing: .085em; }
-.meta-val { color: #dbe1e8; font: 550 10px/1.35 'Fira Code', monospace; }
+.meta-label { color: #85919f; font-size: 8.5px; font-weight: 650; letter-spacing: 0; }
+.meta-val { color: #e1e7ed; font: 600 11px/1.4 'Fira Code', monospace; }
 .org-val { overflow: hidden; font-family: inherit; text-overflow: ellipsis; white-space: nowrap; }
 .status-val { display: flex; align-items: center; gap: 4px; }
 .status-val.online { color: #52cfa3; } .status-val.warning { color: #efb957; } .status-val.alert { color: #ef7777; } .status-val.offline { color: #7b8794; } .status-val.pending { color: #7cbfdd; }
 .live-dot { width: 5px; height: 5px; flex: none; border-radius: 50%; background: currentColor; }
 .card-unlocks-footer { margin-top: auto; padding-top: 9px; border-top: 1px solid rgba(226,232,240,.07); }
-.unlocks-title { display: block; margin-bottom: 7px; color: #65707d; font-size: 7.5px; font-weight: 600; letter-spacing: .11em; }
-.service-dock { display: grid; grid-template-columns: repeat(8,28px); align-items: center; gap: 8px; }
-.service-dock :deep(.metal-badge) { width: 28px; height: 28px; padding: 0; overflow: visible; display: grid; place-items: center; border: 1px solid rgba(226,232,240,.08); border-radius: 6px; background: rgba(3,6,9,.3); box-shadow: inset 0 1px 0 rgba(255,255,255,.025); opacity: 1; transform: none; }
+.unlocks-title { display: block; margin-bottom: 8px; color: #87929f; font-size: 9px; font-weight: 650; letter-spacing: 0; }
+.service-dock { display: grid; grid-template-columns: repeat(8,30px); align-items: center; gap: 8px; }
+.service-dock :deep(.metal-badge) { width: 30px; height: 30px; padding: 0; overflow: visible; display: grid; place-items: center; border: 1px solid rgba(226,232,240,.1); border-radius: 6px; background: rgba(3,6,9,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.03); opacity: 1; transform: none; }
 .service-dock :deep(.metal-badge:hover) { border-color: rgba(226,232,240,.2); box-shadow: none; transform: none; }
 .service-dock :deep(.metal-foil), .service-dock :deep(.metal-light-sweep) { display: none; }
-.service-dock :deep(.brand-logo-wrap) { width: 20px; height: 20px; border: 0; background: transparent; box-shadow: none; }
-.service-dock :deep(.brand-svg) { width: 18px; height: 18px; }
+.service-dock :deep(.brand-logo-wrap) { width: 22px; height: 22px; border: 0; background: transparent; box-shadow: none; }
+.service-dock :deep(.brand-svg) { width: 19px; height: 19px; }
 .service-dock :deep(.brand-generic-char) { font-size: 8px; }
 .service-dock :deep(.compact-cn-tag) { right: -5px; bottom: -4px; box-shadow: none; }
 @media (max-width: 480px) {
@@ -246,7 +240,7 @@ const selectCard = () => props.interactive && emit('select', props.node)
   .issuer-region-text, .risk-text { display: none; }
   .risk-medal { padding-right: 6px; }
   .card-network-row { grid-template-columns: minmax(66px,.8fr) minmax(0,1.25fr) auto; gap: 7px; padding-inline: 8px; }
-  .meta-label { font-size: 6.5px; }
+  .meta-label { font-size: 8px; }
   .service-dock { gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .metal-credit-card { transition: none; } .metal-credit-card.hovering { transform: none; } }

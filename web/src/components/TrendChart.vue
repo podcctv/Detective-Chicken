@@ -21,26 +21,31 @@ const render = () => {
     new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit' }).format(new Date(p.at))
   )
 
+  const chartWidth = host.value.clientWidth
+  const targetLabelCount = chartWidth < 520 ? 4 : chartWidth < 900 ? 6 : 9
+  const labelInterval = Math.max(0, Math.ceil(labels.length / targetLabelCount) - 1)
+
   const textMuted = isDark ? '#94a3b8' : '#64748b'
   const splitLineColor = isDark ? 'rgba(255, 255, 255, 0.05)' : '#eef0f2'
   const axisLineColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#dfe3e8'
 
   chart.setOption({
     animationDuration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 380,
-    grid: { top: 28, right: 16, bottom: 30, left: 40 },
+    grid: { top: 32, right: 18, bottom: 34, left: 44, containLabel: true },
     tooltip: {
       trigger: 'axis',
       backgroundColor: isDark ? 'rgba(15, 23, 42, 0.92)' : '#ffffff',
       borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#e2e8f0',
       borderWidth: 1,
-      textStyle: { color: isDark ? '#f8fafc' : '#1e293b', fontSize: 12 },
+      padding: [9, 11],
+      textStyle: { color: isDark ? '#f8fafc' : '#1e293b', fontFamily: 'Fira Sans, Noto Sans SC, sans-serif', fontSize: 13 },
     },
     legend: {
       top: 0,
       right: 8,
       itemWidth: 14,
       itemHeight: 4,
-      textStyle: { color: textMuted, fontSize: 11 },
+      textStyle: { color: textMuted, fontFamily: 'Fira Sans, Noto Sans SC, sans-serif', fontSize: 12, fontWeight: 500 },
       data: ['综合风险', 'IPQS', 'Scamalytics'],
     },
     xAxis: {
@@ -48,7 +53,7 @@ const render = () => {
       data: labels,
       boundaryGap: false,
       axisLine: { lineStyle: { color: axisLineColor } },
-      axisLabel: { color: textMuted, interval: 4, fontSize: 10 },
+      axisLabel: { color: textMuted, interval: labelInterval, hideOverlap: true, fontSize: 11, fontWeight: 500 },
       axisTick: { show: false },
     },
     yAxis: {
@@ -57,7 +62,7 @@ const render = () => {
       max: 100,
       interval: 25,
       splitLine: { lineStyle: { color: splitLineColor } },
-      axisLabel: { color: textMuted, fontSize: 10 },
+      axisLabel: { color: textMuted, fontSize: 11, fontWeight: 500 },
     },
     series: [
       {

@@ -692,6 +692,87 @@ func (m *Memory) NodeTasks(nodeID, userID string, admin bool) ([]model.TaskLog, 
 	return append([]model.TaskLog(nil), m.tasks[nodeID]...), nil
 }
 
+func (m *Memory) DeleteNode(nodeID, userID string, admin, force bool) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	raw, ok := m.nodes[nodeID]
+	if !ok || (!admin && raw.OwnerUserID != userID) {
+		return 0, ErrNotFound
+	}
+
+	agentIDs := make([]string, 0, 1)
+	for agentID, agent := range m.agents {
+		if agent.NodeID == nodeID {
+			agentIDs = append(agentIDs, agentID)
+		}
+	}
+
+	delete(m.nodes, nodeID)
+	delete(m.series, nodeID)
+	delete(m.tasks, nodeID)
+	for reportID, report := range m.reports {
+		if report.NodeID == nodeID {
+			delete(m.reports, reportID)
+		}
+	}
+	for token, enrollment := range m.enrollments {
+		if enrollment.NodeID == nodeID {
+			delete(m.enrollments, token)
+		}
+	}
+	alerts := m.alerts[:0]
+	for _, alert := range m.alerts {
+		if alert.NodeID != nodeID {
+			alerts = append(alerts, alert)
+		}
+	}
+	m.alerts = alerts
+
+	now := time.Now().UTC()
+	for _, agentID := range agentIDs {
+		if force {
+			m.removeAgentLocked(agentID)
+			continue
+		}
+		m.commands[agentID] = []Command{{ID: randomID("cmd"), Type: "uninstall", CreatedAt: now}}
+	}
+	m.persistLocked()
+	return len(agentIDs), nil
+}
+
+func (m *Memory) CompleteAgentUninstall(agentID, nodeID, commandID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agent, ok := m.agents[agentID]
+	if !ok || agent.NodeID != nodeID {
+		return ErrNotFound
+	}
+	queued := false
+	for _, command := range m.commands[agentID] {
+		if command.ID == commandID && command.Type == "uninstall" {
+			queued = true
+			break
+		}
+	}
+	if !queued {
+		return ErrNotFound
+	}
+	m.removeAgentLocked(agentID)
+	m.persistLocked()
+	return nil
+}
+
+func (m *Memory) removeAgentLocked(agentID string) {
+	delete(m.agents, agentID)
+	delete(m.commands, agentID)
+	prefix := agentID + ":"
+	for key := range m.nonces {
+		if strings.HasPrefix(key, prefix) {
+			delete(m.nonces, key)
+		}
+	}
+}
+
 func (m *Memory) NodeDetailFor(id, userID string, admin, fullIP bool) (model.NodeDetail, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1260,7 +1341,13 @@ func (m *Memory) Commands(agentID string) []Command {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c := append([]Command(nil), m.commands[agentID]...)
-	m.commands[agentID] = nil
+	remaining := m.commands[agentID][:0]
+	for _, command := range m.commands[agentID] {
+		if command.Type == "uninstall" {
+			remaining = append(remaining, command)
+		}
+	}
+	m.commands[agentID] = remaining
 	m.persistLocked()
 	return c
 }
