@@ -9,6 +9,7 @@ const props = withDefaults(
     region?: string
     quality?: string
     latencyMs?: number
+    nodeRegion?: string
     size?: 'sm' | 'md' | 'lg' | 'pill'
     showLabel?: boolean
     interactive?: boolean
@@ -19,6 +20,7 @@ const props = withDefaults(
     region: '',
     quality: '',
     latencyMs: 0,
+    nodeRegion: '',
     size: 'md',
     showLabel: true,
     interactive: true,
@@ -54,6 +56,9 @@ const isYouTubeCN = computed(() =>
   props.serviceId === 'youtube' &&
   (props.region?.toUpperCase() === 'CN' || props.quality?.includes('送中')),
 )
+const regionMatchesNode = computed(() =>
+  Boolean(props.region && props.nodeRegion) && props.region.trim().toUpperCase() === props.nodeRegion.trim().toUpperCase(),
+)
 </script>
 
 <template>
@@ -65,7 +70,12 @@ const isYouTubeCN = computed(() =>
       { 'is-interactive': interactive, 'has-cn-route': isYouTubeCN },
     ]"
     :title="`${name || serviceId}: ${quality || statusLabel} ${region ? `(${region})` : ''} ${latencyMs ? `· ${latencyMs}ms` : ''}`"
+    :role="interactive ? 'button' : undefined"
+    :tabindex="interactive ? 0 : undefined"
+    :aria-label="interactive ? `${name || serviceId}：${quality || statusLabel}` : undefined"
     @click="interactive && emit('click', serviceId)"
+    @keydown.enter.prevent="interactive && emit('click', serviceId)"
+    @keydown.space.prevent="interactive && emit('click', serviceId)"
   >
     <!-- Metallic Beveled Rim Background -->
     <div class="metal-foil"></div>
@@ -198,12 +208,13 @@ const isYouTubeCN = computed(() =>
       </div>
       <span v-if="isYouTubeCN" class="compact-cn-tag">送中</span>
     </div>
+    <span v-if="!showLabel" class="compact-status-dot" aria-hidden="true"></span>
 
     <!-- Metadata / Status Capsule -->
     <div v-if="showLabel" class="metal-badge-meta">
       <div class="meta-top-row">
         <span class="badge-title">{{ name || serviceId }}</span>
-        <span v-if="region" class="badge-region-tag">{{ region }}</span>
+        <span v-if="region" class="badge-region-tag" :class="{ 'is-local': regionMatchesNode }">{{ region }}</span>
       </div>
       <div class="meta-bottom-row">
         <span class="status-gem"></span>
@@ -222,7 +233,10 @@ const isYouTubeCN = computed(() =>
   gap: 8px;
   padding: 5px 10px;
   border-radius: 8px;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(7, 10, 13, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 2px 0 0 var(--status-accent, rgba(100, 116, 139, 0.45));
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
   overflow: hidden;
   user-select: none;
 }
@@ -230,83 +244,56 @@ const isYouTubeCN = computed(() =>
 .metal-badge.is-interactive {
   cursor: pointer;
 }
+.metal-badge.is-interactive:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.8);
+  outline-offset: 2px;
+}
 .metal-badge.is-interactive:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 8px 20px rgba(0, 0, 0, 0.6),
-    0 0 12px rgba(56, 189, 248, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(10, 14, 18, 0.64);
 }
 .metal-badge.has-cn-route {
   overflow: visible;
 }
 
-/* Status 1: Available (彩色高亮) */
+/* Status color is confined to the inset edge and status dot. */
 .status-available {
-  background: linear-gradient(145deg, #18242f, #0d151c);
-  border: 1px solid rgba(16, 185, 129, 0.45);
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.4),
-    0 0 8px rgba(16, 185, 129, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-.status-available:hover {
-  border-color: #10b981;
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+  --status-accent: rgba(34, 197, 94, 0.55);
 }
 .status-available .brand-logo-wrap {
-  background: rgba(0, 0, 0, 0.35);
-  border: none;
+  background: rgba(255, 255, 255, 0.035);
   filter: none;
 }
 .status-available .status-gem {
   background: #10b981;
-  box-shadow: 0 0 8px #10b981;
 }
 
-/* Status 2: Limited (受限/仅自制) */
 .status-limited {
-  background: linear-gradient(145deg, #242018, #14110b);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  --status-accent: rgba(245, 158, 11, 0.55);
 }
 .status-limited .brand-logo-wrap {
-  background: rgba(0, 0, 0, 0.35);
-  border: none;
+  background: rgba(255, 255, 255, 0.035);
 }
 .status-limited .status-gem {
   background: #f59e0b;
-  box-shadow: 0 0 8px #f59e0b;
 }
 
-/* Status 3: Blocked (未解锁/封锁 - 灰色带暗红) */
 .status-blocked {
-  background: linear-gradient(145deg, #181517, #0f0c0d);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  --status-accent: rgba(239, 68, 68, 0.5);
 }
 .status-blocked .brand-logo-wrap {
-  background: rgba(0, 0, 0, 0.5);
-  border: none;
-  filter: grayscale(100%) opacity(0.55);
+  background: rgba(255, 255, 255, 0.035);
 }
 .status-blocked .status-gem {
   background: #ef4444;
-  box-shadow: 0 0 6px #ef4444;
 }
 
-/* Status 4: Untested (未检测 - 虚线灰色) */
 .status-untested {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  opacity: 0.55;
+  --status-accent: rgba(100, 116, 139, 0.45);
 }
 .status-untested .brand-logo-wrap {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  filter: grayscale(100%) opacity(0.35);
+  background: rgba(255, 255, 255, 0.025);
 }
 .status-untested .status-gem {
   background: #64748b;
@@ -316,22 +303,11 @@ const isYouTubeCN = computed(() =>
 .metal-foil {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.06), transparent 70%);
+  background: linear-gradient(120deg, transparent 20%, rgba(255, 255, 255, 0.025) 48%, transparent 68%);
   pointer-events: none;
 }
 .metal-light-sweep {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
-  transform: skewX(-20deg);
-  transition: left 0.5s ease;
-  pointer-events: none;
-}
-.metal-badge:hover .metal-light-sweep {
-  left: 140%;
+  display: none;
 }
 
 /* Brand Logo Container */
@@ -343,8 +319,8 @@ const isYouTubeCN = computed(() =>
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
-  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.035);
+  transition: background 0.18s ease;
 }
 .compact-cn-tag {
   position: absolute;
@@ -356,11 +332,24 @@ const isYouTubeCN = computed(() =>
   background: #f59e0b;
   color: #111827;
   font-size: 7px;
-  font-weight: 900;
+  font-weight: 700;
   line-height: 12px;
   white-space: nowrap;
-  box-shadow: 0 0 5px rgba(245, 158, 11, 0.75);
 }
+.compact-status-dot {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 4;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #64748b;
+  border: 1px solid rgba(8, 12, 16, 0.9);
+}
+.status-available .compact-status-dot { background: #34d399; }
+.status-limited .compact-status-dot { background: #fbbf24; }
+.status-blocked .compact-status-dot { background: #f87171; }
 .brand-svg {
   width: 17px;
   height: 17px;
@@ -426,27 +415,33 @@ const isYouTubeCN = computed(() =>
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 .meta-top-row {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 .badge-title {
+  min-width: 0;
+  overflow: hidden;
   font-size: 11.5px;
   font-weight: 600;
   color: #f8fafc;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .badge-region-tag {
+  flex: none;
+  margin-left: auto;
   font-family: 'Fira Code', monospace;
   font-size: 8.5px;
-  font-weight: 700;
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  padding: 0 3px;
-  border-radius: 3px;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-weight: 600;
+  color: #7dd3fc;
+}
+.badge-region-tag.is-local {
+  color: #697582;
 }
 
 .meta-bottom-row {
@@ -456,18 +451,20 @@ const isYouTubeCN = computed(() =>
   font-size: 9.5px;
   color: #94a3b8;
   white-space: nowrap;
+  min-width: 0;
 }
 .status-desc {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 95px;
 }
 .badge-latency {
+  margin-left: auto;
+  flex: none;
   font-family: 'Fira Code', monospace;
   font-size: 8.5px;
-  color: #38bdf8;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 0 3px;
-  border-radius: 2px;
+  color: #8b97a4;
+  font-variant-numeric: tabular-nums;
 }
 </style>
