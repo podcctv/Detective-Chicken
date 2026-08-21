@@ -93,17 +93,72 @@ const logNode = ref<Node | null>(null)
 const logModalOpen = ref(false)
 const nodeTasks = ref<TaskLog[]>([])
 const taskLoading = ref(false)
+let taskPollTimer: number | undefined
+
+const stopTaskPolling = () => {
+  if (taskPollTimer !== undefined) {
+    window.clearTimeout(taskPollTimer)
+    taskPollTimer = undefined
+  }
+}
+
+const syncNodeSnapshots = (nodeId: string) => {
+  const latest = data.value.nodes.find((node) => node.id === nodeId)
+  if (!latest) return
+  if (logNode.value?.id === nodeId) logNode.value = latest
+  if (selected.value?.id === nodeId) Object.assign(selected.value, latest)
+}
+
+const refreshNodeAndTasks = async (nodeId: string, showLoading = false) => {
+  if (showLoading) taskLoading.value = true
+  try {
+    const [dashboard, tasks] = await Promise.all([
+      api<Dashboard>('/api/v1/dashboard'),
+      api<{ items: TaskLog[] }>(`/api/v1/nodes/${nodeId}/tasks`),
+    ])
+    dashboard.rankings ??= []
+    data.value = dashboard
+    nodeTasks.value = tasks.items || []
+    syncNodeSnapshots(nodeId)
+    return nodeTasks.value
+  } finally {
+    if (showLoading) taskLoading.value = false
+  }
+}
+
+const pollTaskUntilSettled = (nodeId: string, taskId: string) => {
+  stopTaskPolling()
+  const deadline = Date.now() + 10 * 60 * 1000
+
+  const tick = async () => {
+    try {
+      const tasks = await refreshNodeAndTasks(nodeId)
+      const task = tasks.find((item) => item.id === taskId)
+      if (task && (task.status === 'completed' || task.status === 'failed')) {
+        stopTaskPolling()
+        return
+      }
+    } catch {
+      // A transient refresh failure should not abandon an in-flight scan.
+    }
+
+    if (Date.now() < deadline) {
+      taskPollTimer = window.setTimeout(tick, 2000)
+    } else {
+      stopTaskPolling()
+    }
+  }
+
+  taskPollTimer = window.setTimeout(tick, 1000)
+}
 
 const openTasksAndLogs = async (node: Node) => {
   logNode.value = node
   logModalOpen.value = true
-  taskLoading.value = true
   try {
-    const res = await api<{ items: TaskLog[] }>(`/api/v1/nodes/${node.id}/tasks`)
-    nodeTasks.value = res.items || []
+    await refreshNodeAndTasks(node.id, true)
   } catch {
     nodeTasks.value = node.last_task ? [node.last_task] : []
-  } finally {
     taskLoading.value = false
   }
 }
@@ -407,6 +462,15 @@ const scan = async (node: Node) => {
     showToast(`已向 ${node.name} 下发完整 20+ 项 AI 与流媒体深度扫描任务`)
   } catch (error) {
     showToast(error instanceof Error ? error.message : '扫描任务下发失败')
+    return
+  }
+
+  try {
+    const tasks = await refreshNodeAndTasks(node.id)
+    const latestTask = tasks.at(-1)
+    if (latestTask) pollTaskUntilSettled(node.id, latestTask.id)
+  } catch {
+    showToast('扫描任务已下发，节点数据将在下次刷新时同步')
   }
 }
 
@@ -611,6 +675,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopTaskPolling()
   window.removeEventListener('keydown', closeOverlay)
 })
 </script>
