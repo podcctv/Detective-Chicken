@@ -154,7 +154,7 @@ func TestCloudflareASNAloneIsNotWARP(t *testing.T) {
 func TestMaskIPLastTwoSegments(t *testing.T) {
 	cases := map[string]string{
 		"203.0.113.99":       "203.0.*.*",
-		"2a01:4f8:c2c:17::1": "2a01:4f8:c2c:17:0:0:*:*",
+		"2a01:4f8:c2c:17::1": "2a01:4f8:c2c:17:*:*:*:*",
 	}
 	for input, want := range cases {
 		if got := MaskIP(input); got != want {

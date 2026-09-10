@@ -64,7 +64,7 @@ const node = (values: Partial<Node> & Pick<Node, 'id' | 'name'>): Node => {
 export const demoNodes: Node[] = [
   node({
     id: 'node_hkg_01', name: 'HK-CMI-01', provider: 'DMIT', region: '香港', masked_ip: '103.145.12.*',
-    masked_ipv4: '103.145.12.*', masked_ipv6: '2402:4e00:1000::*', families: [4, 6],
+    masked_ipv4: '103.145.12.*', masked_ipv6: '2402:4e00:1000:0:*:*:*:*', families: [4, 6],
     asn: 906, organization: 'DMIT Cloud Services', country_code: 'HK', usage_type: '机房', ip_type: '原生',
     latitude: 22.3193, longitude: 114.1694,
     risk: 18, status: 'online', netflix: 'available', chatgpt: 'available', dnsbl: 0,
@@ -133,7 +133,7 @@ export const demoNodes: Node[] = [
     }),
   }),
   node({
-    id: 'node_fra_04', name: 'DE-FRA-04', provider: 'Hetzner', region: '法兰克福', family: 6, masked_ip: '2a01:4f8:c2c:*',
+    id: 'node_fra_04', name: 'DE-FRA-04', provider: 'Hetzner', region: '法兰克福', family: 6, masked_ip: '2a01:4f8:c2c:17:*:*:*:*',
     asn: 24940, organization: 'Hetzner Online', country_code: 'DE', latitude: 50.1109, longitude: 8.6821,
     risk: 34, status: 'online', netflix: 'blocked', chatgpt: 'available', dnsbl: 1,
     last_seen: ago(1), last_scan: ago(240),

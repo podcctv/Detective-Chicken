@@ -6,6 +6,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  watch,
 } from 'vue'
 import {
   Activity,
@@ -170,6 +171,13 @@ const search = ref('')
 const filter = ref('all')
 const toast = ref('')
 const fatalError = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
+
+// Password visibility toggles
+const showLoginPassword = ref(false)
+const showResetPassword = ref(false)
+const showCurrentPassword = ref(false)
+const showNewPassword = ref(false)
 
 const authMode = ref<'login' | 'register'>('login')
 const authBusy = ref(false)
@@ -681,16 +689,46 @@ const toggleDark = () => {
   nextTick(() => window.dispatchEvent(new Event('resize')))
 }
 
-const closeOverlay = (event: KeyboardEvent) => {
+// UI Handbook: Body scroll locking when overlays/modals are open
+const isAnyOverlayOpen = computed(() =>
+  Boolean(
+    selected.value ||
+    enrollOpen.value ||
+    loginOpen.value ||
+    adminOpen.value ||
+    passwordOpen.value ||
+    logModalOpen.value ||
+    reinstallModalOpen.value ||
+    deleteCandidate.value ||
+    compareModalOpen.value ||
+    menuOpen.value
+  )
+)
+
+watch(isAnyOverlayOpen, (open) => {
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = open ? 'hidden' : ''
+  }
+})
+
+// UI Handbook: Esc dismiss priority & quick search shortcut
+const handleGlobalKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') {
-    selected.value = null
-    enrollOpen.value = false
-    menuOpen.value = false
-    loginOpen.value = false
-    adminOpen.value = false
-    passwordOpen.value = false
-    compareModalOpen.value = false
-    deleteCandidate.value = null
+    if (deleteCandidate.value) { deleteCandidate.value = null; return }
+    if (reinstallModalOpen.value) { reinstallModalOpen.value = false; return }
+    if (logModalOpen.value) { logModalOpen.value = false; return }
+    if (compareModalOpen.value) { compareModalOpen.value = false; return }
+    if (adminOpen.value) { adminOpen.value = false; return }
+    if (passwordOpen.value) { passwordOpen.value = false; return }
+    if (enrollOpen.value) { closeEnrollment(); return }
+    if (loginOpen.value) { loginOpen.value = false; return }
+    if (selected.value) { selected.value = null; return }
+    if (menuOpen.value) { menuOpen.value = false; return }
+  } else if (event.key === '/' && viewMode.value === 'fleet' && !isAnyOverlayOpen.value) {
+    const target = event.target as HTMLElement | null
+    if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+    event.preventDefault()
+    searchInputRef.value?.focus()
   }
 }
 
@@ -698,7 +736,7 @@ onMounted(() => {
   const saved = localStorage.getItem('detective-theme')
   dark.value = saved ? saved === 'dark' : true
   document.documentElement.dataset.theme = dark.value ? 'dark' : 'light'
-  window.addEventListener('keydown', closeOverlay)
+  window.addEventListener('keydown', handleGlobalKeydown)
   const hash = location.hash
   if (hash.startsWith('#reset=')) {
     resetToken.value = decodeURIComponent(hash.replace('#reset=', ''))
@@ -709,7 +747,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopTaskPolling()
-  window.removeEventListener('keydown', closeOverlay)
+  window.removeEventListener('keydown', handleGlobalKeydown)
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = ''
+  }
 })
 </script>
 
@@ -918,7 +959,23 @@ onBeforeUnmount(() => {
             <div class="fleet-tools">
               <label class="search-field">
                 <Search :size="15" />
-                <input v-model="search" type="search" placeholder="搜索节点名、地区、IP 或 ASN..." />
+                <input
+                  ref="searchInputRef"
+                  v-model="search"
+                  type="search"
+                  placeholder="搜索节点名、地区、IP 或 ASN..."
+                />
+                <button
+                  v-if="search"
+                  type="button"
+                  class="search-clear-btn"
+                  title="清空搜索"
+                  aria-label="清空搜索"
+                  @click="search = ''"
+                >
+                  <X :size="12" />
+                </button>
+                <span v-else class="search-kbd" title="按 '/' 键聚焦搜索">/</span>
               </label>
               <label class="filter-field">
                 <ListFilter :size="15" />
@@ -941,7 +998,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="table-wrap">
+          <div v-if="filteredNodes.length" class="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -1048,6 +1105,30 @@ onBeforeUnmount(() => {
               </tbody>
             </table>
           </div>
+
+          <!-- Empty State: No nodes enrolled yet -->
+          <div v-else-if="data.nodes.length === 0" class="empty-state-card" style="margin: 32px 20px;">
+            <div class="empty-state-icon">
+              <Server :size="24" />
+            </div>
+            <h3 class="empty-state-title">暂无已接入的小鸡探针</h3>
+            <p class="empty-state-desc">通过生成 Ed25519 签名凭据，在目标服务器一键部署探针即可开启 20+ 款 AI 与流媒体服务态势研判</p>
+            <button class="primary-btn" @click="enrollOpen = true">
+              <Plus :size="15" /> 立即添加小鸡探针
+            </button>
+          </div>
+
+          <!-- Empty State: Search filter no results -->
+          <div v-else class="empty-state-card" style="margin: 32px 20px;">
+            <div class="empty-state-icon">
+              <Search :size="24" />
+            </div>
+            <h3 class="empty-state-title">未找到匹配的小鸡节点</h3>
+            <p class="empty-state-desc">没有节点匹配当前的搜索关键词 "{{ search }}" 或状态筛选条件</p>
+            <button class="secondary-btn" @click="search = ''; filter = 'all'">
+              <RefreshCw :size="14" /> 重置筛选条件
+            </button>
+          </div>
         </section>
       </template>
 
@@ -1060,11 +1141,12 @@ onBeforeUnmount(() => {
               <h2>安全告警与规则审计中心</h2>
               <p>动态变化型触发规则，阻断突发封禁与 IP 欺诈升级</p>
             </div>
-            <span class="env-badge" style="color: var(--danger);">
+            <span class="env-badge" :style="{ color: data.alerts.length ? 'var(--danger)' : 'var(--good)' }">
               共 {{ data.alerts.length }} 条未归档事件
             </span>
           </div>
-          <div class="alert-list">
+
+          <div v-if="data.alerts.length" class="alert-list">
             <div
               v-for="alert in data.alerts"
               :key="alert.id"
@@ -1090,7 +1172,7 @@ onBeforeUnmount(() => {
                 <small>{{ relative(alert.created_at) }}</small>
               </div>
               <button
-                class="primary-btn"
+                class="secondary-btn"
                 style="height: 30px; font-size: 11px;"
                 @click.stop="
                   () => {
@@ -1102,6 +1184,14 @@ onBeforeUnmount(() => {
                 <ScanLine :size="13" /> 立即复测
               </button>
             </div>
+          </div>
+
+          <div v-else class="empty-state-card" style="margin: 32px 20px;">
+            <div class="empty-state-icon good">
+              <CheckCircle2 :size="24" />
+            </div>
+            <h3 class="empty-state-title">所有小鸡节点运行平稳</h3>
+            <p class="empty-state-desc">当前暂无未解决的安全威胁、IP 异常漂移或服务大面积封禁事件</p>
           </div>
         </section>
       </template>
@@ -1331,7 +1421,7 @@ onBeforeUnmount(() => {
 
           <div class="drawer-actions">
             <button class="secondary-btn" @click="selected = null">关闭</button>
-            <button class="danger-btn" @click="requestNodeDelete(selected)">
+            <button class="danger-ghost-btn" @click="requestNodeDelete(selected)">
               <Trash2 :size="15" /> 删除节点
             </button>
             <button class="secondary-btn" @click="triggerReinstall(selected)">
@@ -1678,11 +1768,46 @@ onBeforeUnmount(() => {
           <form @submit.prevent="changePassword" style="padding: 16px 20px;">
             <label>
               当前原密码
-              <input v-model="passwordForm.current_password" type="password" required />
+              <div class="input-password-wrap">
+                <input
+                  v-model="passwordForm.current_password"
+                  :type="showCurrentPassword ? 'text' : 'password'"
+                  required
+                  placeholder="请输入当前密码"
+                  autocomplete="current-password"
+                />
+                <button
+                  type="button"
+                  class="input-password-toggle"
+                  :aria-label="showCurrentPassword ? '隐藏当前密码' : '显示当前密码'"
+                  @click="showCurrentPassword = !showCurrentPassword"
+                >
+                  <EyeOff v-if="showCurrentPassword" :size="15" />
+                  <Eye v-else :size="15" />
+                </button>
+              </div>
             </label>
             <label>
               新密码 (至少 8 位)
-              <input v-model="passwordForm.new_password" type="password" minlength="8" required />
+              <div class="input-password-wrap">
+                <input
+                  v-model="passwordForm.new_password"
+                  :type="showNewPassword ? 'text' : 'password'"
+                  minlength="8"
+                  required
+                  placeholder="请输入新密码"
+                  autocomplete="new-password"
+                />
+                <button
+                  type="button"
+                  class="input-password-toggle"
+                  :aria-label="showNewPassword ? '隐藏新密码' : '显示新密码'"
+                  @click="showNewPassword = !showNewPassword"
+                >
+                  <EyeOff v-if="showNewPassword" :size="15" />
+                  <Eye v-else :size="15" />
+                </button>
+              </div>
             </label>
             <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
               <button type="button" class="secondary-btn" @click="passwordOpen = false">取消</button>
@@ -1714,7 +1839,25 @@ onBeforeUnmount(() => {
           <form v-if="resetToken" @submit.prevent="completeReset" style="padding: 16px 20px;">
             <label>
               新密码 (至少 8 位)
-              <input v-model="resetPassword" type="password" minlength="8" required placeholder="请输入新密码" />
+              <div class="input-password-wrap">
+                <input
+                  v-model="resetPassword"
+                  :type="showResetPassword ? 'text' : 'password'"
+                  minlength="8"
+                  required
+                  placeholder="请输入新密码"
+                  autocomplete="new-password"
+                />
+                <button
+                  type="button"
+                  class="input-password-toggle"
+                  :aria-label="showResetPassword ? '隐藏新密码' : '显示新密码'"
+                  @click="showResetPassword = !showResetPassword"
+                >
+                  <EyeOff v-if="showResetPassword" :size="15" />
+                  <Eye v-else :size="15" />
+                </button>
+              </div>
             </label>
             <div v-if="authError" style="padding: 8px 12px; background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444; border-radius: 4px; font-size: 11.5px; color: #ef4444; margin-top: 10px;">
               {{ authError }}
@@ -1739,7 +1882,25 @@ onBeforeUnmount(() => {
             </label>
             <label>
               密码
-              <input v-model="authForm.password" type="password" required placeholder="请输入密码" :minlength="authMode === 'register' ? 8 : 1" autocomplete="current-password" />
+              <div class="input-password-wrap">
+                <input
+                  v-model="authForm.password"
+                  :type="showLoginPassword ? 'text' : 'password'"
+                  required
+                  placeholder="请输入密码"
+                  :minlength="authMode === 'register' ? 8 : 1"
+                  autocomplete="current-password"
+                />
+                <button
+                  type="button"
+                  class="input-password-toggle"
+                  :aria-label="showLoginPassword ? '隐藏密码' : '显示密码'"
+                  @click="showLoginPassword = !showLoginPassword"
+                >
+                  <EyeOff v-if="showLoginPassword" :size="15" />
+                  <Eye v-else :size="15" />
+                </button>
+              </div>
             </label>
             <div v-if="authError" style="padding: 8px 12px; background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444; border-radius: 4px; font-size: 11.5px; color: #ef4444; margin-top: 10px;">
               {{ authError }}

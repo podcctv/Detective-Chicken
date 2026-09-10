@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   Bot,
   LogIn,
@@ -94,6 +94,30 @@ const protocolLabel = (node: Node) => {
 const aiServices = computed(() => Object.values(inspectNode.value?.unlocks?.ai ?? {}))
 const streamingServices = computed(() => Object.values(inspectNode.value?.unlocks?.streaming ?? {}))
 const serviceCount = computed(() => aiServices.value.length + streamingServices.value.length)
+
+// UI Handbook: Lock body scroll when modal is open & handle Esc dismissal
+watch(inspectNode, (node) => {
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = node ? 'hidden' : ''
+  }
+})
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && inspectNode.value) {
+    inspectNode.value = null
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = ''
+  }
+})
 </script>
 
 <template>
@@ -330,9 +354,10 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #090d12;
-  color: #f8fafc;
+  background: var(--bg);
+  color: var(--text);
   font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Header */
@@ -342,12 +367,13 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   justify-content: space-between;
   gap: 16px;
   padding: 14px 28px;
-  background: rgba(13, 18, 24, 0.85);
+  background: var(--surface);
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .public-brand {
@@ -388,7 +414,7 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 .brand-main {
   font-size: 17px;
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--text);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -405,15 +431,15 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 }
 .brand-sub {
   font-size: 10px;
-  color: #64748b;
+  color: var(--muted);
   letter-spacing: 0.5px;
 }
 
 /* Nav Tabs */
 .public-nav-tabs {
   display: flex;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 4px;
   gap: 4px;
@@ -427,21 +453,21 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   background: transparent;
   border: 0;
   border-radius: 7px;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .public-tab:hover {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  background: var(--surface-3);
 }
 .public-tab.active {
-  background: linear-gradient(145deg, #1e293b, #0f172a);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  background: var(--surface);
+  color: var(--primary);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Top Actions */
@@ -475,17 +501,20 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #cbd5e1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
   display: grid;
   place-items: center;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .metal-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #f8fafc;
+  background: var(--surface-3);
+  color: var(--text);
+}
+.metal-icon-btn:active {
+  transform: scale(0.97);
 }
 
 .primary-metal-btn {
@@ -507,6 +536,20 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   filter: brightness(1.15);
   transform: translateY(-1px);
 }
+.primary-metal-btn:active {
+  transform: scale(0.97);
+}
+
+/* UI Handbook: Strict tabular numbers for metrics and stats */
+.gauge-value,
+.modal-metric-ribbon strong,
+.modal-ip,
+.hud-val,
+.rank-score-capsule,
+.rank-badge-wrap {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
 
 /* Main */
 .public-main {
@@ -525,11 +568,11 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   display: flex;
   flex-direction: column;
   gap: 20px;
-  background: linear-gradient(145deg, #131922 0%, #0d1219 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 24px 28px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow);
 }
 
 .hero-badge {
@@ -539,7 +582,7 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   padding: 3px 10px;
   border-radius: 20px;
   background: rgba(56, 189, 248, 0.12);
-  color: #38bdf8;
+  color: var(--primary);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.8px;
@@ -550,13 +593,13 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 .hero-title {
   font-size: 26px;
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--text);
   letter-spacing: -0.5px;
 }
 
 .hero-desc {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--muted);
   max-width: 860px;
   line-height: 1.6;
   margin-top: 6px;
@@ -575,8 +618,8 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   align-items: center;
   gap: 14px;
   padding: 14px 18px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -607,22 +650,22 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 .gauge-label {
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--muted);
 }
 .gauge-value {
   font-family: 'Fira Code', monospace;
   font-size: 20px;
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--text);
   margin: 1px 0;
 }
 .gauge-value small {
   font-size: 11px;
-  color: #64748b;
+  color: var(--faint);
 }
 .gauge-sub {
   font-size: 10px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .text-emerald { color: #10b981 !important; }
@@ -655,27 +698,27 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 .chip-btn {
   padding: 5px 12px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .chip-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--surface-3);
+  color: var(--text);
 }
 .chip-btn.active {
-  background: rgba(56, 189, 248, 0.2);
-  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.18);
+  color: var(--primary);
   border-color: rgba(56, 189, 248, 0.4);
 }
 
 .fleet-meta-hint {
   font-size: 11.5px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .credit-cards-grid {
@@ -690,14 +733,14 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 .metal-empty-deck {
   padding: 48px;
   text-align: center;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
   border-radius: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 /* Rankings View */
@@ -708,29 +751,29 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 }
 
 .metal-panel {
-  background: linear-gradient(145deg, #131922 0%, #0e141b 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow);
 }
 
 .panel-head-metallic {
   display: flex;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 12px;
   margin-bottom: 14px;
 }
 .panel-head-metallic h2 {
   font-size: 16px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--text);
 }
 .panel-head-metallic small {
   font-size: 11px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .metal-ranking-table {
@@ -744,15 +787,15 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .ranking-row:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(56, 189, 248, 0.3);
+  background: var(--surface-3);
+  border-color: var(--primary);
   transform: translateX(3px);
 }
 
@@ -760,12 +803,13 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-3);
   display: grid;
   place-items: center;
   font-family: 'Fira Code', monospace;
   font-weight: 800;
   font-size: 12px;
+  color: var(--text);
 }
 .podium-gold .rank-badge-wrap { background: #eab308; color: #000; }
 .podium-silver .rank-badge-wrap { background: #cbd5e1; color: #000; }
@@ -777,16 +821,16 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 .rank-node-info strong {
   display: block;
   font-size: 13px;
-  color: #f8fafc;
+  color: var(--text);
 }
 .rank-node-info small {
   font-size: 11px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .rank-services-count {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--muted);
 }
 
 .rank-score-capsule {
@@ -795,7 +839,7 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   font-size: 13px;
   padding: 2px 8px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--surface-3);
 }
 .rank-score-capsule.risk-low { color: #10b981; }
 .rank-score-capsule.risk-mid { color: #f59e0b; }
@@ -808,17 +852,17 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 }
 .criteria-item {
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--surface-2);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
 }
 .criteria-item strong {
   font-size: 12.5px;
-  color: #38bdf8;
+  color: var(--primary);
 }
 .criteria-item p {
   font-size: 11.5px;
-  color: #94a3b8;
+  color: var(--muted);
   margin-top: 2px;
   line-height: 1.4;
 }
@@ -841,10 +885,10 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   max-width: 940px;
   max-height: min(92vh, 900px);
   overflow-y: auto;
-  background: linear-gradient(145deg, #151a20, #0b0f13);
-  border: 1px solid rgba(226, 232, 240, 0.17);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-lg);
   padding: 24px;
   animation: cardFlipExpand 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transform-origin: center center;
@@ -872,7 +916,7 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.1);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 16px;
   gap: 12px;
 }
@@ -883,12 +927,12 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   gap: 4px;
   min-width: 0;
 }
-.report-eyebrow { color: #7c8794; font: 600 9px/1.3 'Fira Code', monospace; letter-spacing: 0.16em; }
+.report-eyebrow { color: var(--muted); font: 600 9px/1.3 'Fira Code', monospace; letter-spacing: 0.16em; }
 .report-title-line { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .modal-title-wrap h3 {
   margin: 0;
   overflow: hidden;
-  color: #f1f5f9;
+  color: var(--text);
   font-size: 20px;
   font-weight: 650;
   letter-spacing: 0.015em;
@@ -904,7 +948,7 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   font: 600 9px/1.4 'Fira Code', monospace;
 }
 .modal-title-wrap small {
-  color: #7f8a98;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -918,18 +962,18 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #cbd5e1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
   display: grid;
   place-items: center;
   cursor: pointer;
   transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 .metal-close-btn:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: #f8fafc;
+  background: var(--surface-3);
+  border-color: var(--primary);
+  color: var(--text);
 }
 .metal-close-btn:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
 
@@ -943,13 +987,13 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 .modal-metric-ribbon {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border-block: 1px solid rgba(226, 232, 240, 0.09);
+  border-block: 1px solid var(--border);
 }
 .summary-metric { min-width: 0; padding: 11px 14px; }
-.summary-metric + .summary-metric { border-left: 1px solid rgba(226, 232, 240, 0.08); }
+.summary-metric + .summary-metric { border-left: 1px solid var(--border); }
 .modal-metric-ribbon span {
   display: block;
-  color: #707b88;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -958,7 +1002,7 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   display: block;
   overflow: hidden;
   margin-top: 3px;
-  color: #e6ebf0;
+  color: var(--text);
   font-family: 'Fira Code', monospace;
   font-size: 12px;
   font-weight: 600;
@@ -977,9 +1021,9 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   grid-template-columns: repeat(4, 1fr);
   gap: 0;
   padding: 3px 0;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--surface-2);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
 }
 .hud-item {
   min-width: 0;
@@ -988,33 +1032,33 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   gap: 2px;
   padding: 9px 13px;
 }
-.hud-item + .hud-item { border-left: 1px solid rgba(226, 232, 240, 0.07); }
+.hud-item + .hud-item { border-left: 1px solid var(--border); }
 .hud-label {
   font-size: 9px;
   font-weight: 600;
-  color: #6f7a87;
+  color: var(--muted);
   letter-spacing: 0.5px;
 }
 .hud-val {
   font-family: 'Fira Code', monospace;
   font-size: 10px;
   font-weight: 550;
-  color: #dce2e8;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.hud-sub { overflow: hidden; color: #929daa; font-size: 9px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.hud-sub { overflow: hidden; color: var(--muted); font-size: 9px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 
 .modal-section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #b9c2cc;
+  color: var(--text);
   font: 600 10px/1.4 'Fira Code', monospace;
   letter-spacing: 0.12em;
 }
-.modal-section-title small { color: #687481; font-size: 8px; letter-spacing: 0.08em; }
+.modal-section-title small { color: var(--muted); font-size: 8px; letter-spacing: 0.08em; }
 
 .modal-badges-grid {
   display: flex;
@@ -1030,18 +1074,26 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #97a3af;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.08em;
 }
-.group-label small { color: #687481; font: 500 8px/1 'Fira Code', monospace; }
+.group-label small { color: var(--faint); font: 500 8px/1 'Fira Code', monospace; }
 .group-badges {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
 }
-.group-badges :deep(.metal-badge) { width: 100%; min-width: 0; min-height: 52px; padding: 7px 9px; border-color: rgba(226,232,240,.1); border-radius: 7px; background: rgba(4,7,10,.32); }
+.group-badges :deep(.metal-badge) {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 9px;
+  border-color: var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+}
 .group-badges :deep(.brand-logo-wrap) { width: 30px; height: 30px; background: transparent; box-shadow: none; }
 .group-badges :deep(.brand-svg) { width: 21px; height: 21px; }
 .group-badges :deep(.metal-badge-meta) { min-width: 0; }
@@ -1053,16 +1105,16 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
 /* Footer */
 .public-footer {
   margin-top: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
   padding: 18px 28px;
-  background: rgba(10, 14, 20, 0.9);
+  background: var(--surface);
 }
 .footer-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 11px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 @media (max-width: 980px) {
@@ -1084,9 +1136,9 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   .public-main { padding: 18px; }
   .group-badges { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .modal-metric-ribbon, .network-hud-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .summary-metric:nth-child(3), .summary-metric:nth-child(4) { border-top: 1px solid rgba(226, 232, 240, 0.08); }
+  .summary-metric:nth-child(3), .summary-metric:nth-child(4) { border-top: 1px solid var(--border); }
   .summary-metric:nth-child(3) { border-left: 0; }
-  .hud-item:nth-child(3), .hud-item:nth-child(4) { border-top: 1px solid rgba(226, 232, 240, 0.07); }
+  .hud-item:nth-child(3), .hud-item:nth-child(4) { border-top: 1px solid var(--border); }
   .hud-item:nth-child(3) { border-left: 0; }
   .footer-meta { align-items: flex-start; flex-direction: column; gap: 5px; }
 }
@@ -1109,7 +1161,7 @@ const serviceCount = computed(() => aiServices.value.length + streamingServices.
   .report-title-line { align-items: flex-start; flex-direction: column; gap: 5px; }
   .modal-title-wrap h3 { font-size: 18px; }
   .modal-metric-ribbon, .network-hud-bar, .group-badges { grid-template-columns: 1fr; }
-  .summary-metric + .summary-metric, .hud-item + .hud-item { border-left: 0; border-top: 1px solid rgba(226, 232, 240, 0.08); }
+  .summary-metric + .summary-metric, .hud-item + .hud-item { border-left: 0; border-top: 1px solid var(--border); }
   .group-badges :deep(.metal-badge) { min-height: 50px; }
   .public-footer { padding: 14px 12px; }
 }

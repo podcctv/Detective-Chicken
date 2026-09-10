@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 
-:root {
+:root,
+:root[data-theme='light'] {
   color-scheme: light;
   --bg: #f4f6f9;
   --surface: #ffffff;
@@ -25,6 +26,38 @@
   --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.1);
   --sidebar: #0f172a;
   --sidebar-text: #e2e8f0;
+
+  /* UI Handbook Scale: Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* UI Handbook Scale: Component Heights */
+  --control-h-sm: 32px;
+  --control-h-md: 36px;
+  --control-h-lg: 44px;
+
+  /* UI Handbook Scale: Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* UI Handbook Strict Z-Index Scale */
+  --z-base: 0;
+  --z-hover: 10;
+  --z-dropdown: 20;
+  --z-sticky: 30;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-toast: 60;
 }
 
 :root[data-theme='dark'] {
@@ -56,6 +89,11 @@
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
   --sidebar: #0b1017;
   --sidebar-text: #e2e8f0;
+
+  /* Dark mode luminous borders */
+  --luminous-border: rgba(255, 255, 255, 0.08);
+  --luminous-border-hover: rgba(255, 255, 255, 0.16);
+  --luminous-glow: 0 0 16px rgba(56, 189, 248, 0.15);
 }
 
 
@@ -102,6 +140,38 @@ button {
   color: inherit;
 }
 
+/* UI Handbook: Micro-interactions & Active Click Feedback */
+button:active:not(:disabled),
+.primary-btn:active:not(:disabled),
+.secondary-btn:active:not(:disabled),
+.danger-btn:active:not(:disabled),
+.danger-ghost-btn:active:not(:disabled),
+.table-action-btn:active:not(:disabled),
+.icon-btn:active:not(:disabled),
+.chip-btn:active:not(:disabled),
+.nav-btn:active {
+  transform: scale(0.97);
+}
+
+/* UI Handbook: Tabular numbers for numerical, IP, latency and date columns */
+.kpi-card strong,
+.risk-cell strong,
+.country-code,
+.dnsbl,
+.drawer-summary strong,
+.task-time,
+.public-summary strong,
+.public-score,
+.public-unlocks,
+.rank-badge-wrap,
+.rank-score-capsule,
+.summary-metric strong,
+code,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
 /* App Layout */
 .app-shell {
   min-height: 100vh;
@@ -112,7 +182,7 @@ button {
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
-  z-index: 40;
+  z-index: var(--z-drawer);
   width: 230px;
   background: var(--sidebar);
   color: var(--sidebar-text);
@@ -276,7 +346,7 @@ button {
   top: 0;
   background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(12px);
-  z-index: 30;
+  z-index: var(--z-sticky);
   margin: 0 -24px 18px;
   padding: 0 24px;
 }
@@ -651,6 +721,11 @@ button {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--muted);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.search-field:focus-within, .filter-field:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 .search-field input, .filter-field select {
   background: transparent;
@@ -660,6 +735,39 @@ button {
   outline: none;
 }
 .search-field input { width: 180px; }
+
+.search-clear-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.search-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+}
+
+.search-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  font: 600 10px 'Fira Code', monospace;
+  color: var(--faint);
+  user-select: none;
+}
 
 .table-wrap {
   width: 100%;
@@ -755,7 +863,7 @@ tbody tr:hover {
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--z-drawer);
   background: rgba(10, 14, 20, 0.6);
   backdrop-filter: blur(4px);
 }
@@ -914,7 +1022,7 @@ tbody tr:hover {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--z-modal);
   background: rgba(10, 14, 20, 0.7);
   backdrop-filter: blur(4px);
   display: grid;
@@ -969,6 +1077,34 @@ tbody tr:hover {
   color: var(--text);
 }
 
+.input-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.input-password-wrap input {
+  width: 100%;
+  padding-right: 36px;
+}
+.input-password-toggle {
+  position: absolute;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.input-password-toggle:hover {
+  color: var(--text);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -996,7 +1132,7 @@ tbody tr:hover {
 /* Toast */
 .toast {
   position: fixed;
-  z-index: 200;
+  z-index: var(--z-toast);
   right: 24px;
   bottom: 24px;
   min-height: 42px;
@@ -1053,7 +1189,7 @@ tbody tr:hover {
   .sidebar-scrim {
     position: fixed;
     inset: 0;
-    z-index: 35;
+    z-index: calc(var(--z-drawer) - 1);
     background: rgba(0, 0, 0, 0.5);
   }
   .main-content {
@@ -1710,4 +1846,55 @@ tbody tr:hover {
   margin-top: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+
+/* UI Handbook: Standardized Empty State Component */
+.empty-state-card {
+  padding: 44px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.empty-state-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+.empty-state-icon.good {
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  color: var(--good);
+}
+.empty-state-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.empty-state-desc {
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 400px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* UI Handbook: Reduced Motion Accessibility Preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

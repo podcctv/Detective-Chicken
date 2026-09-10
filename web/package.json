@@ -10,9 +10,10 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@lucide/vue": "latest",
     "@vitejs/plugin-vue": "latest",
     "echarts": "^6.0.0",
-    "@lucide/vue": "latest",
+    "html-to-image": "^1.11.13",
     "vite": "latest",
     "vue": "^3.5.13"
   },

@@ -514,11 +514,11 @@ const hideCellTooltip = () => {
 
 /* Banner */
 .matrix-banner {
-  background: linear-gradient(145deg, #182029 0%, #0e141b 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-sm);
 }
 
 .banner-summary {
@@ -556,7 +556,7 @@ const hideCellTooltip = () => {
   font-family: 'Fira Code', monospace;
   font-size: 16px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--text);
   margin: 1px 0;
 }
 .summary-metric small {
@@ -581,8 +581,8 @@ const hideCellTooltip = () => {
 
 .category-tabs {
   display: flex;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 3px;
   gap: 3px;
@@ -595,15 +595,16 @@ const hideCellTooltip = () => {
   background: transparent;
   border: 0;
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .tab-btn.active {
-  background: #1e293b;
-  color: #38bdf8;
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .toolbar-right {
@@ -617,16 +618,16 @@ const hideCellTooltip = () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;
-  color: #94a3b8;
+  color: var(--muted);
 }
 .search-box input {
   background: transparent;
   border: 0;
-  color: #f8fafc;
+  color: var(--text);
   font-size: 12px;
   outline: none;
   width: 170px;
@@ -636,16 +637,16 @@ const hideCellTooltip = () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;
-  color: #94a3b8;
+  color: var(--muted);
 }
 .filter-dropdown select {
   background: transparent;
   border: 0;
-  color: #f8fafc;
+  color: var(--text);
   font-size: 12px;
   outline: none;
   cursor: pointer;
@@ -653,8 +654,8 @@ const hideCellTooltip = () => {
 
 .mode-toggle-group {
   display: flex;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 2px;
 }
@@ -663,12 +664,13 @@ const hideCellTooltip = () => {
   background: transparent;
   border: 0;
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--muted);
   cursor: pointer;
 }
 .mode-btn.active {
-  background: #1e293b;
-  color: #38bdf8;
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .compare-btn {
@@ -696,9 +698,9 @@ const hideCellTooltip = () => {
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #0c1117;
+  background: var(--surface);
 }
 
 .matrix-table {
@@ -709,36 +711,37 @@ const hideCellTooltip = () => {
 
 .matrix-table th {
   padding: 10px 8px;
-  background: #131922;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   text-align: center;
   font-size: 12px;
-  color: #cbd5e1;
+  color: var(--muted);
 }
 
 .col-sticky-node {
   position: sticky;
   left: 0;
   z-index: 10;
-  background: #131922;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
   min-width: 236px;
   text-align: left !important;
 }
 
 .matrix-row {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border);
   transition: background 0.15s ease;
 }
 .matrix-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-2);
 }
 
 .matrix-row td {
   padding: 9px 7px;
   text-align: center;
   vertical-align: middle;
-  border-right: 1px solid rgba(255, 255, 255, 0.03);
+  border-right: 1px solid var(--border);
 }
 .col-service-th,
 .matrix-cell {
@@ -759,7 +762,7 @@ const hideCellTooltip = () => {
   display: block;
   max-width: 76px;
   overflow: hidden;
-  color: #dbe5ef;
+  color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -789,7 +792,7 @@ const hideCellTooltip = () => {
 .node-title-row strong {
   font-size: 13px;
   font-weight: 650;
-  color: #f8fafc;
+  color: var(--text);
 }
 .risk-mini-badge {
   font-family: 'Fira Code', monospace;
@@ -822,26 +825,28 @@ const hideCellTooltip = () => {
   gap: 16px;
 }
 .node-badges-card {
-  background: linear-gradient(145deg, #161e27, #0c1117);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .node-badges-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(56, 189, 248, 0.35);
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
 }
 
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
 }
 .card-node-id {
@@ -861,7 +866,7 @@ const hideCellTooltip = () => {
 .card-node-id strong {
   display: block;
   font-size: 13px;
-  color: #f8fafc;
+  color: var(--text);
 }
 .card-node-id small {
   font-size: 10.5px;
