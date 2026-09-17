@@ -794,6 +794,10 @@ const copyCardImage = async () => {
   background: currentColor;
   box-shadow: 0 0 6px currentColor;
 }
+.status-val.offline .live-dot {
+  box-shadow: none;
+  opacity: 0.5;
+}
 
 /* Service Dock */
 .card-unlocks-footer {

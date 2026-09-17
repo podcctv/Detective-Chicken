@@ -110,6 +110,7 @@ const getUnlock = (node: Node, serviceId: string) => {
                   <div class="col-head-info">
                     <span class="country-tag">{{ node.country_code }}</span>
                     <strong>{{ node.name }}</strong>
+                    <StatusBadge :value="node.status" :pill="true" />
                   </div>
                   <button
                     class="remove-btn"
@@ -319,6 +320,7 @@ const getUnlock = (node: Node, serviceId: string) => {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .country-tag {
   padding: 1px 4px;

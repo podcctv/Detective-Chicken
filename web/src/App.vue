@@ -331,8 +331,16 @@ const loadDashboard = async (manual = false) => {
   try {
     data.value = await api<Dashboard>('/api/v1/dashboard')
     data.value.rankings ??= []
+    if (selected.value) {
+      const updated = data.value.nodes.find((n) => n.id === selected.value!.id)
+      if (updated) Object.assign(selected.value, updated)
+    }
+    if (logNode.value) {
+      const updated = data.value.nodes.find((n) => n.id === logNode.value!.id)
+      if (updated) logNode.value = updated
+    }
   } catch (error) {
-    fatalError.value = error instanceof Error ? error.message : '总览加载失败'
+    if (manual) fatalError.value = error instanceof Error ? error.message : '总览加载失败'
   } finally {
     refreshing.value = false
   }
@@ -343,11 +351,61 @@ const loadPublicDashboard = async (manual = false) => {
   try {
     data.value = await api<Dashboard>('/api/v1/public/dashboard')
     data.value.rankings ??= []
+    if (selected.value) {
+      const updated = data.value.nodes.find((n) => n.id === selected.value!.id)
+      if (updated) Object.assign(selected.value, updated)
+    }
+    if (logNode.value) {
+      const updated = data.value.nodes.find((n) => n.id === logNode.value!.id)
+      if (updated) logNode.value = updated
+    }
   } catch (error) {
-    fatalError.value =
-      error instanceof Error ? error.message : '公开质量数据加载失败'
+    if (manual) fatalError.value = error instanceof Error ? error.message : '公开质量数据加载失败'
   } finally {
     refreshing.value = false
+  }
+}
+
+let dashboardPollTimer: number | undefined
+let lastDashboardFetch = Date.now()
+
+const triggerSilentRefresh = async () => {
+  if (refreshing.value || loading.value) return
+  lastDashboardFetch = Date.now()
+  if (auth.value?.authenticated) {
+    await loadDashboard(false).catch(() => undefined)
+  } else if (auth.value?.settings?.bootstrapped) {
+    await loadPublicDashboard(false).catch(() => undefined)
+  }
+}
+
+const startDashboardPolling = () => {
+  stopDashboardPolling()
+  dashboardPollTimer = window.setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      triggerSilentRefresh()
+    }
+  }, 30000)
+}
+
+const stopDashboardPolling = () => {
+  if (dashboardPollTimer !== undefined) {
+    window.clearInterval(dashboardPollTimer)
+    dashboardPollTimer = undefined
+  }
+}
+
+const handleVisibilityChange = () => {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    if (Date.now() - lastDashboardFetch > 15000) {
+      triggerSilentRefresh()
+    }
+  }
+}
+
+const handleWindowFocus = () => {
+  if (Date.now() - lastDashboardFetch > 15000) {
+    triggerSilentRefresh()
   }
 }
 
@@ -737,6 +795,11 @@ onMounted(() => {
   dark.value = saved ? saved === 'dark' : true
   document.documentElement.dataset.theme = dark.value ? 'dark' : 'light'
   window.addEventListener('keydown', handleGlobalKeydown)
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
+  }
+  startDashboardPolling()
   const hash = location.hash
   if (hash.startsWith('#reset=')) {
     resetToken.value = decodeURIComponent(hash.replace('#reset=', ''))
@@ -746,6 +809,11 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopDashboardPolling()
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    window.removeEventListener('focus', handleWindowFocus)
+  }
   stopTaskPolling()
   window.removeEventListener('keydown', handleGlobalKeydown)
   if (typeof document !== 'undefined') {
@@ -1065,7 +1133,12 @@ onBeforeUnmount(() => {
                     </div>
                   </td>
                   <td>
-                    <StatusBadge :value="node.status" />
+                    <div style="display: flex; flex-direction: column; gap: 3px; align-items: flex-start;">
+                      <StatusBadge :value="node.status" />
+                      <small style="font-size: 10px; color: var(--muted); white-space: nowrap;">
+                        {{ node.status === 'offline' ? '已离线' : '心跳' }} · {{ relative(node.last_seen) }}
+                      </small>
+                    </div>
                   </td>
                   <td class="table-actions-cell" @click.stop>
                     <button
@@ -1258,6 +1331,10 @@ onBeforeUnmount(() => {
             <div>
               <span>心跳状态</span>
               <StatusBadge :value="selected.status" />
+            </div>
+            <div>
+              <span>最近心跳</span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--text);">{{ relative(selected.last_seen) }}</span>
             </div>
             <div>
               <span>上次全扫描</span>

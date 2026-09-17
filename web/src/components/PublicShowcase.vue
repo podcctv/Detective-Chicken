@@ -78,6 +78,14 @@ const riskLabel = (node: Node) => {
   if (node.risk <= 75) return '中度注意'
   return '高风险'
 }
+const relative = (input?: string) => {
+  if (!input || new Date(input).getFullYear() <= 1) return '尚未上报'
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(input).getTime()) / 1000))
+  if (seconds < 60) return `${seconds} 秒前`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`
+  return `${Math.floor(seconds / 86400)} 天前`
+}
 const maskedAddresses = (node: Node) => {
   const addresses = [node.masked_ipv4, node.masked_ipv6].filter(Boolean)
   return addresses.length ? addresses.join(' · ') : (node.masked_ip || 'IP 待检测')
@@ -232,6 +240,9 @@ onBeforeUnmount(() => {
               <div class="report-title-line">
                 <h3 id="inspection-report-title">{{ inspectNode.name }}</h3>
                 <span class="report-location">{{ inspectNode.country_code || inspectNode.region || '—' }} · {{ detectedUsage(inspectNode) }}</span>
+                <span class="hud-status-tag" :class="inspectNode.status">
+                  {{ inspectNode.status === 'offline' ? '已离线' : inspectNode.status === 'alert' ? '告警' : inspectNode.status === 'warning' ? '注意' : inspectNode.status === 'pending' ? '待接入' : '在线' }}
+                </span>
               </div>
               <small>{{ inspectNode.provider || 'VPS NODE' }} · {{ inspectNode.region || '地区待检测' }}</small>
             </div>
@@ -269,6 +280,13 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="network-hud-bar">
+              <div class="hud-item">
+                <span class="hud-label">在线状态</span>
+                <span class="hud-val" :class="inspectNode.status === 'offline' ? 'text-muted' : 'text-emerald'">
+                  {{ inspectNode.status === 'offline' ? '已离线' : '在线运行' }}
+                </span>
+                <span class="hud-sub">心跳: {{ relative(inspectNode.last_seen) }}</span>
+              </div>
               <div class="hud-item">
                 <span class="hud-label">公网脱敏 IP</span>
                 <code class="modal-ip">{{ maskedAddresses(inspectNode) }}</code>
@@ -947,6 +965,19 @@ onBeforeUnmount(() => {
   color: #8bd8f8;
   font: 600 9px/1.4 'Fira Code', monospace;
 }
+.hud-status-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.hud-status-tag.online { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.hud-status-tag.warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.hud-status-tag.alert { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.hud-status-tag.offline { background: rgba(100, 116, 139, 0.18); color: #64748b; }
+.hud-status-tag.pending { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
 .modal-title-wrap small {
   color: var(--muted);
   font-size: 10px;
@@ -1018,7 +1049,7 @@ onBeforeUnmount(() => {
 
 .network-hud-bar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0;
   padding: 3px 0;
   background: var(--surface-2);

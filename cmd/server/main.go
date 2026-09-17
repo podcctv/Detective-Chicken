@@ -35,6 +35,8 @@ func main() {
 		logger.Error("unable to open data store", "error", err)
 		os.Exit(1)
 	}
+	stopReconcile := st.StartReconciliation(30 * time.Second)
+	defer stopReconcile()
 	api := server.New(st, logger)
 	logger.Info("Detective Chicken API listening", "addr", addr)
 	if err = http.ListenAndServe(addr, api.Handler()); err != nil {

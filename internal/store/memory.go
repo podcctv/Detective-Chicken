@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,7 +20,10 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
-const DefaultScanIntervalMinutes = 360
+const (
+	DefaultScanIntervalMinutes = 360
+	DefaultHeartbeatTimeout    = 6 * time.Minute
+)
 
 type AgentKey struct {
 	AgentID   string
@@ -67,9 +71,16 @@ type Memory struct {
 	passwordResets      map[string]PasswordReset
 	registrationEnabled bool
 	dataPath            string
+	heartbeatTimeout    time.Duration
 }
 
 func NewMemory(seed bool) *Memory {
+	timeout := DefaultHeartbeatTimeout
+	if envTimeout := os.Getenv("DETECTIVE_CHICKEN_HEARTBEAT_TIMEOUT"); envTimeout != "" {
+		if d, err := time.ParseDuration(envTimeout); err == nil && d > 0 {
+			timeout = d
+		}
+	}
 	m := &Memory{
 		nodes: make(map[string]model.Node), series: make(map[string][]model.TrendPoint),
 		agents: make(map[string]AgentKey), enrollments: make(map[string]Enrollment),
@@ -77,12 +88,39 @@ func NewMemory(seed bool) *Memory {
 		commands: make(map[string][]Command), tasks: make(map[string][]model.TaskLog),
 		users: make(map[string]UserAccount), usernames: make(map[string]string),
 		sessions: make(map[string]Session), passwordResets: make(map[string]PasswordReset),
+		heartbeatTimeout: timeout,
 	}
 
 	if seed {
 		m.seed()
 	}
 	return m
+}
+
+func (m *Memory) SetHeartbeatTimeout(d time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if d > 0 {
+		m.heartbeatTimeout = d
+	}
+}
+
+func (m *Memory) offlineTimeout() time.Duration {
+	if m.heartbeatTimeout > 0 {
+		return m.heartbeatTimeout
+	}
+	return DefaultHeartbeatTimeout
+}
+
+func (m *Memory) isNodeOffline(n model.Node) bool {
+	// Newly enrolled node awaiting its very first heartbeat or scan
+	if n.Status == "pending" && n.LastScan.IsZero() {
+		return false
+	}
+	if n.LastSeen.IsZero() {
+		return false
+	}
+	return time.Since(n.LastSeen) > m.offlineTimeout()
 }
 
 func randomID(prefix string) string {
@@ -497,7 +535,11 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 		fallbackGeoCoordinates(&nodes[i])
 		n := nodes[i]
 		allowed[n.ID] = true
-		if n.Status != "offline" {
+		if n.Status == "offline" {
+			stats["offline"]++
+		} else if n.Status == "pending" {
+			stats["pending"]++
+		} else {
 			stats["online"]++
 		}
 		if n.Status == "alert" || n.Status == "warning" {
@@ -640,8 +682,8 @@ func (m *Memory) dashboardForNodesLocked(nodes []model.Node, includeAlerts bool)
 
 func (m *Memory) nodesLocked() []model.Node {
 	nodes := make([]model.Node, 0, len(m.nodes))
-	for _, n := range m.nodes {
-		nodes = append(nodes, n)
+	for _, raw := range m.nodes {
+		nodes = append(nodes, m.nodeView(raw, "", false, false))
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Risk > nodes[j].Risk })
 	return nodes
@@ -652,6 +694,15 @@ func (m *Memory) nodeView(raw model.Node, userID string, admin, fullIP bool) mod
 	if view.ScanIntervalMinutes == 0 {
 		view.ScanIntervalMinutes = DefaultScanIntervalMinutes
 	}
+	if m.isNodeOffline(view) {
+		view.Status = "offline"
+		if view.QualityStatus == "scanning" {
+			view.QualityStatus = "failed"
+			if view.LastScanError == "" {
+				view.LastScanError = "节点心跳超时已离线"
+			}
+		}
+	}
 	view.CanViewFullIP = admin || (userID != "" && raw.OwnerUserID == userID)
 	view.IPAddress = raw.MaskedIP
 	if fullIP && view.CanViewFullIP {
@@ -659,6 +710,12 @@ func (m *Memory) nodeView(raw model.Node, userID string, admin, fullIP bool) mod
 	}
 	if taskList, ok := m.tasks[raw.ID]; ok && len(taskList) > 0 {
 		last := taskList[len(taskList)-1]
+		if view.Status == "offline" && (last.Status == "pending" || last.Status == "running") {
+			last.Status = "failed"
+			if last.Error == "" {
+				last.Error = "节点心跳超时已离线，探测任务已终止"
+			}
+		}
 		view.LastTask = &last
 	}
 	return view
@@ -1026,6 +1083,16 @@ func (m *Memory) SaveHeartbeat(h model.Heartbeat) error {
 		}
 	}
 
+	// When heartbeat is received, remove heartbeat_missing alerts for this node
+	filteredAlerts := m.alerts[:0]
+	for _, a := range m.alerts {
+		if a.NodeID == n.ID && a.Type == "heartbeat_missing" {
+			continue
+		}
+		filteredAlerts = append(filteredAlerts, a)
+	}
+	m.alerts = filteredAlerts
+
 	m.nodes[n.ID] = n
 	m.persistLocked()
 	return nil
@@ -1083,11 +1150,102 @@ func (m *Memory) SaveReport(r model.Report) error {
 		}
 	}
 
+	filteredAlerts := m.alerts[:0]
+	for _, a := range m.alerts {
+		if a.NodeID == n.ID && a.Type == "heartbeat_missing" {
+			continue
+		}
+		filteredAlerts = append(filteredAlerts, a)
+	}
+	m.alerts = filteredAlerts
+
 	m.nodes[n.ID] = n
 	m.reports[r.ReportID] = r
 	m.series[n.ID] = append(m.series[n.ID], model.TrendPoint{At: r.CollectedAt, Risk: reportRisk, IPQS: reportRisk})
 	m.persistLocked()
 	return nil
+}
+
+func (m *Memory) ReconcileNodeHealth() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now().UTC()
+	changed := false
+
+	for id, n := range m.nodes {
+		if !m.isNodeOffline(n) {
+			continue
+		}
+		if n.Status != "offline" {
+			n.Status = "offline"
+			if n.QualityStatus == "scanning" {
+				n.QualityStatus = "failed"
+				if n.LastScanError == "" {
+					n.LastScanError = "节点心跳超时已离线"
+				}
+			}
+			if taskList, ok := m.tasks[n.ID]; ok && len(taskList) > 0 {
+				last := &taskList[len(taskList)-1]
+				if last.Status == "pending" || last.Status == "running" {
+					last.Status = "failed"
+					last.Message = "探测任务因节点失联超时终止"
+					last.Error = "节点心跳超时已离线，探测任务已终止"
+					last.UpdatedAt = now
+					n.LastTask = last
+				}
+			}
+
+			// Add heartbeat_missing alert if not present
+			hasAlert := false
+			for _, a := range m.alerts {
+				if a.NodeID == n.ID && a.Type == "heartbeat_missing" && a.ResolvedAt == nil {
+					hasAlert = true
+					break
+				}
+			}
+			if !hasAlert {
+				m.alerts = append(m.alerts, model.Alert{
+					ID:        randomID("alert"),
+					NodeID:    n.ID,
+					NodeName:  n.Name,
+					Type:      "heartbeat_missing",
+					Severity:  "warning",
+					Title:     "节点心跳超时 (已离线)",
+					Detail:    fmt.Sprintf("节点超过 %d 分钟未向控制面上报心跳，已被自动标记为离线。", int(time.Since(n.LastSeen).Minutes())),
+					CreatedAt: now,
+				})
+			}
+
+			m.nodes[id] = n
+			changed = true
+		}
+	}
+
+	if changed {
+		m.persistLocked()
+	}
+}
+
+func (m *Memory) StartReconciliation(interval time.Duration) func() {
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-done:
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				m.ReconcileNodeHealth()
+			}
+		}
+	}()
+	return func() {
+		close(done)
+	}
 }
 
 func applyReportIdentity(node *model.Node, report model.Report) {

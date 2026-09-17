@@ -341,12 +341,12 @@ const render = () => {
     const isSelected = props.selectedId === n.id
 
     let color = '#10b981' // green
-    if (n.status === 'alert' || n.risk >= 60) color = '#ef4444' // red
+    if (n.status === 'offline') color = '#64748b'
+    else if (n.status === 'alert' || n.risk >= 60) color = '#ef4444' // red
     else if (n.status === 'warning' || n.risk >= 35) color = '#f59e0b' // yellow
-    else if (n.status === 'offline') color = '#64748b'
 
-    // Pulsing Radar Rings around front nodes
-    if (isFront) {
+    // Pulsing Radar Rings around front nodes (active nodes only)
+    if (isFront && n.status !== 'offline') {
       const pulseProgress = (tick + n.risk * 0.1) % 2
       const ringRadius = 6 + pulseProgress * 14
       const ringAlpha = Math.max(0, (1 - pulseProgress / 2) * depthAlpha * 0.7)
